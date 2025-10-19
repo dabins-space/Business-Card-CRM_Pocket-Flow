@@ -155,7 +155,7 @@ export default async function handler(
     if (!res.headersSent) {
       res.status(500).json({
         ok: false,
-        error: `Internal server error: ${error.message || 'Unknown error'}`
+        error: `Internal server error: ${error instanceof Error ? error.message : 'Unknown error'}`
       })
     }
   }

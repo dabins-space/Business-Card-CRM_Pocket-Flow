@@ -39,16 +39,20 @@ export default async function handler(
 
   } catch (error) {
     console.error('Test OCR Error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    const errorStack = error instanceof Error ? error.stack : undefined
+    const errorName = error instanceof Error ? error.name : 'Unknown'
+    
     console.error('Error details:', {
-      message: error.message,
-      stack: error.stack,
-      name: error.name
+      message: errorMessage,
+      stack: errorStack,
+      name: errorName
     })
     
     res.status(500).json({
       ok: false,
       error: 'Google Vision API test failed',
-      details: error.message
+      details: errorMessage
     })
   }
 }

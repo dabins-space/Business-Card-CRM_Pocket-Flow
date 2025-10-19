@@ -53,7 +53,7 @@ export default async function handler(
 
     if (error) {
       console.error('Supabase error:', error)
-      return res.status(500).json({ ok: false, error: `Failed to fetch contact: ${error.message}` })
+      return res.status(500).json({ ok: false, error: `Failed to fetch contact: ${error instanceof Error ? error.message : 'Unknown error'}` })
     }
 
     if (!contact) {
@@ -71,7 +71,7 @@ export default async function handler(
     console.error('Contact API error:', error)
     res.status(500).json({
       ok: false,
-      error: `Internal server error: ${error.message || 'Unknown error'}`
+      error: `Internal server error: ${error instanceof Error ? error.message : 'Unknown error'}`
     })
   }
 }

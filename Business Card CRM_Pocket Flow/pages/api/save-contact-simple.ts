@@ -31,7 +31,7 @@ export default async function handler(
     console.error('Simple API error:', error)
     res.status(500).json({
       ok: false,
-      error: `Simple API error: ${error.message}`
+      error: `Simple API error: ${error instanceof Error ? error.message : 'Unknown error'}`
     })
   }
 }

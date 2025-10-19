@@ -72,26 +72,30 @@ export default async function handler(
 
   } catch (error) {
     console.error('OCR Error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    const errorStack = error instanceof Error ? error.stack : undefined
+    const errorName = error instanceof Error ? error.name : 'Unknown'
+    
     console.error('Error details:', {
-      message: error.message,
-      stack: error.stack,
-      name: error.name
+      message: errorMessage,
+      stack: errorStack,
+      name: errorName
     })
     
     // 더 구체적인 에러 메시지 제공
-    let errorMessage = 'Failed to process image'
-    if (error.message.includes('credentials')) {
-      errorMessage = 'Google Vision API credentials error'
-    } else if (error.message.includes('quota')) {
-      errorMessage = 'Google Vision API quota exceeded'
-    } else if (error.message.includes('permission')) {
-      errorMessage = 'Google Vision API permission denied'
+    let finalErrorMessage = 'Failed to process image'
+    if (errorMessage.includes('credentials')) {
+      finalErrorMessage = 'Google Vision API credentials error'
+    } else if (errorMessage.includes('quota')) {
+      finalErrorMessage = 'Google Vision API quota exceeded'
+    } else if (errorMessage.includes('permission')) {
+      finalErrorMessage = 'Google Vision API permission denied'
     }
     
     res.status(500).json({
       ok: false,
-      error: errorMessage,
-      details: error.message
+      error: finalErrorMessage,
+      details: errorMessage
     })
   }
 }
