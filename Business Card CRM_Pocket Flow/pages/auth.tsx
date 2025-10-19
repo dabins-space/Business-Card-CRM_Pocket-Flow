@@ -9,13 +9,10 @@ import { Label } from "../components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { Alert, AlertDescription } from "../components/ui/alert";
 import { Building2, AlertCircle, CheckCircle } from "lucide-react";
+import { useAuth } from "../contexts/AuthContext";
 
 // AuthContext를 dynamic으로 감싸기
 const AuthProvider = dynamic(() => import("../contexts/AuthContext").then(mod => ({ default: mod.AuthProvider })), {
-  ssr: false,
-});
-
-const useAuth = dynamic(() => import("../contexts/AuthContext").then(mod => ({ default: mod.useAuth })), {
   ssr: false,
 });
 
