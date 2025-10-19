@@ -39,7 +39,10 @@ export default function Home({ onNavigate }: HomePageProps) {
   });
 
   const handleCameraClick = () => {
-    fileInputRef.current?.click();
+    // 태블릿/모바일에서는 실제 카메라 촬영을 위해 capture 속성 사용
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
   };
 
   const handleImageCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -202,6 +205,7 @@ export default function Home({ onNavigate }: HomePageProps) {
                 capture="environment"
                 onChange={handleImageCapture}
                 className="hidden"
+                aria-label="카메라로 명함 촬영"
               />
 
               {/* Camera Button */}
@@ -210,7 +214,7 @@ export default function Home({ onNavigate }: HomePageProps) {
                 className="w-full max-w-xs gap-2"
               >
                 <Camera className="w-4 h-4" />
-                명함 촬영
+                카메라로 촬영
               </Button>
             </div>
           </div>
@@ -218,10 +222,10 @@ export default function Home({ onNavigate }: HomePageProps) {
           {/* Helper Text */}
           <div className="text-center space-y-1">
             <p className="text-muted-foreground">
-              카메라로 명함을 촬영해주세요.
+              버튼을 누르면 카메라가 열립니다.
             </p>
             <p className="text-muted-foreground">
-              자동으로 정보를 추출합니다.
+              명함을 촬영하면 자동으로 정보를 추출합니다.
             </p>
           </div>
         </div>

@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { Textarea } from "../components/ui/textarea";
+import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import {
   AlertDialog,
@@ -31,6 +32,9 @@ import {
   Lightbulb,
   Target,
   FileText,
+  CreditCard,
+  Save,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getImportanceColor, getPriorityColor } from "../utils/helpers";
@@ -38,26 +42,64 @@ import { getVerticalLabel } from "../constants/data";
 
 interface CustomerDetailPageProps {
   onNavigate?: (page: string) => void;
+  contactId?: string;
 }
 
-export default function CustomerDetail({ onNavigate }: CustomerDetailPageProps) {
+export default function CustomerDetail({ onNavigate, contactId }: CustomerDetailPageProps) {
   const [activeTab, setActiveTab] = useState("info");
   const [newMemo, setNewMemo] = useState("");
+  const [cardData, setCardData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState<any>({});
+  const [saving, setSaving] = useState(false);
 
-  const cardData = {
-    id: 1,
-    name: "김철수",
-    position: "팀장",
-    department: "개발팀",
-    company: "테크코퍼레이션",
-    vertical: "it",
-    email: "kim@techcorp.com",
-    phone: "010-1234-5678",
-    importance: 5,
-    inquiryTypes: ["제안", "파트너십"],
-    memo: "새로운 프로젝트 협업 논의. 내년 1분기 시작 예정.",
-    image: "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=800&h=500&fit=crop",
-    date: "2025-10-17",
+  useEffect(() => {
+    loadContactData();
+  }, [contactId]);
+
+  const loadContactData = async () => {
+    try {
+      setLoading(true);
+      
+      if (!contactId) {
+        setError('연락처 ID가 없습니다');
+        return;
+      }
+
+      console.log('Loading contact data for ID:', contactId);
+      
+      const response = await fetch(`/api/contact/${contactId}`);
+      const result = await response.json();
+      
+      console.log('Contact API response:', result);
+      
+      if (result.ok && result.contact) {
+        const contact = result.contact;
+        setCardData({
+          id: contact.id,
+          name: contact.name,
+          position: contact.title || '',
+          department: contact.department || '',
+          company: contact.company || '',
+          email: contact.email || '',
+          phone: contact.phone || '',
+          importance: contact.importance,
+          inquiryTypes: contact.inquiry_types || [],
+          memo: contact.memo || '',
+          image_path: contact.image_path,
+          date: new Date(contact.created_at).toLocaleDateString('ko-KR'),
+        });
+      } else {
+        setError(result.error || '연락처를 불러오는데 실패했습니다');
+      }
+    } catch (error: any) {
+      console.error('Failed to load contact:', error);
+      setError('연락처를 불러오는데 실패했습니다');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const companyInfo = {
@@ -129,6 +171,105 @@ export default function CustomerDetail({ onNavigate }: CustomerDetailPageProps) 
     setNewMemo("");
   };
 
+  const handleEdit = () => {
+    setEditData({
+      name: cardData.name,
+      title: cardData.position,
+      department: cardData.department,
+      company: cardData.company,
+      email: cardData.email,
+      phone: cardData.phone,
+      importance: cardData.importance,
+      inquiry_types: cardData.inquiryTypes,
+      memo: cardData.memo,
+    });
+    setIsEditing(true);
+  };
+
+  const handleSave = async () => {
+    if (!contactId) return;
+
+    try {
+      setSaving(true);
+      console.log('Saving contact data:', editData);
+
+      const response = await fetch(`/api/contact/${contactId}/update`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(editData)
+      });
+
+      const result = await response.json();
+      console.log('Update response:', result);
+
+      if (result.ok && result.contact) {
+        // 업데이트된 데이터로 상태 업데이트
+        const updatedContact = result.contact;
+        setCardData({
+          id: updatedContact.id,
+          name: updatedContact.name,
+          position: updatedContact.title || '',
+          department: updatedContact.department || '',
+          company: updatedContact.company || '',
+          email: updatedContact.email || '',
+          phone: updatedContact.phone || '',
+          importance: updatedContact.importance,
+          inquiryTypes: updatedContact.inquiry_types || [],
+          memo: updatedContact.memo || '',
+          image_path: updatedContact.image_path,
+          date: new Date(updatedContact.updated_at).toLocaleDateString('ko-KR'),
+        });
+        
+        setIsEditing(false);
+        toast.success("연락처 정보가 수정되었습니다");
+      } else {
+        console.error('Update failed:', result.error);
+        toast.error(result.error || "수정에 실패했습니다");
+      }
+    } catch (error: any) {
+      console.error('Update error:', error);
+      toast.error("수정 중 오류가 발생했습니다");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setIsEditing(false);
+    setEditData({});
+    toast.info("수정이 취소되었습니다");
+  };
+
+  if (loading) {
+    return (
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">연락처 정보를 불러오는 중...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !cardData) {
+    return (
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <p className="text-destructive mb-4">{error || '연락처를 찾을 수 없습니다'}</p>
+            <Button onClick={() => onNavigate && onNavigate("/customers")}>
+              고객 목록으로 돌아가기
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       {/* Header */}
@@ -155,10 +296,41 @@ export default function CustomerDetail({ onNavigate }: CustomerDetailPageProps) 
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" className="gap-2">
-            <Edit className="w-4 h-4" />
-            수정
-          </Button>
+          {!isEditing ? (
+            <Button variant="outline" className="gap-2" onClick={handleEdit}>
+              <Edit className="w-4 h-4" />
+              수정
+            </Button>
+          ) : (
+            <>
+              <Button 
+                className="gap-2" 
+                onClick={handleSave}
+                disabled={saving}
+              >
+                {saving ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    저장 중...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    저장
+                  </>
+                )}
+              </Button>
+              <Button 
+                variant="outline" 
+                className="gap-2" 
+                onClick={handleCancel}
+                disabled={saving}
+              >
+                <X className="w-4 h-4" />
+                취소
+              </Button>
+            </>
+          )}
           <Button
             variant="outline"
             className="gap-2"
@@ -198,11 +370,21 @@ export default function CustomerDetail({ onNavigate }: CustomerDetailPageProps) 
           </CardHeader>
           <CardContent>
             <div className="aspect-[16/10] rounded-lg overflow-hidden border border-border">
-              <img
-                src={cardData.image}
-                alt={cardData.name}
-                className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
-              />
+              {cardData.image_path ? (
+                <img
+                  src={`https://qmyyyxkpemdjuwtimwsv.supabase.co/storage/v1/object/public/business-cards/${cardData.image_path}`}
+                  alt={cardData.name}
+                  className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
+                  onError={(e) => {
+                    // 이미지 로드 실패 시 기본 이미지 표시
+                    e.currentTarget.style.display = 'none';
+                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                  }}
+                />
+              ) : null}
+              <div className={`w-full h-full flex items-center justify-center bg-muted ${cardData.image_path ? 'hidden' : ''}`}>
+                <CreditCard className="w-16 h-16 text-muted-foreground" />
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -230,39 +412,124 @@ export default function CustomerDetail({ onNavigate }: CustomerDetailPageProps) 
             <CardContent>
               {/* 기본정보 탭 */}
               <TabsContent value="info" className="space-y-4 mt-0">
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                    <Mail className="w-5 h-5 text-muted-foreground" />
-                    <div>
-                      <p className="text-muted-foreground">이메일</p>
-                      <p className="text-foreground">{cardData.email}</p>
+                {isEditing ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-name">이름</Label>
+                        <Input
+                          id="edit-name"
+                          value={editData.name || ''}
+                          onChange={(e) => setEditData({ ...editData, name: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-title">직책</Label>
+                        <Input
+                          id="edit-title"
+                          value={editData.title || ''}
+                          onChange={(e) => setEditData({ ...editData, title: e.target.value })}
+                        />
+                      </div>
                     </div>
-                  </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-department">부서</Label>
+                        <Input
+                          id="edit-department"
+                          value={editData.department || ''}
+                          onChange={(e) => setEditData({ ...editData, department: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-company">회사</Label>
+                        <Input
+                          id="edit-company"
+                          value={editData.company || ''}
+                          onChange={(e) => setEditData({ ...editData, company: e.target.value })}
+                        />
+                      </div>
+                    </div>
 
-                  <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                    <Phone className="w-5 h-5 text-muted-foreground" />
-                    <div>
-                      <p className="text-muted-foreground">전화번호</p>
-                      <p className="text-foreground">{cardData.phone}</p>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-email">이메일</Label>
+                      <Input
+                        id="edit-email"
+                        type="email"
+                        value={editData.email || ''}
+                        onChange={(e) => setEditData({ ...editData, email: e.target.value })}
+                      />
                     </div>
-                  </div>
 
-                  <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                    <Building2 className="w-5 h-5 text-muted-foreground" />
-                    <div>
-                      <p className="text-muted-foreground">회사</p>
-                      <p className="text-foreground">{cardData.company}</p>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-phone">전화번호</Label>
+                      <Input
+                        id="edit-phone"
+                        type="tel"
+                        value={editData.phone || ''}
+                        onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
+                      />
                     </div>
-                  </div>
 
-                  <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                    <Calendar className="w-5 h-5 text-muted-foreground" />
-                    <div>
-                      <p className="text-muted-foreground">등록일</p>
-                      <p className="text-foreground">{cardData.date}</p>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-importance">중요도</Label>
+                      <Input
+                        id="edit-importance"
+                        type="number"
+                        min="1"
+                        max="5"
+                        value={editData.importance || 3}
+                        onChange={(e) => setEditData({ ...editData, importance: parseInt(e.target.value) })}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-memo">메모</Label>
+                      <Textarea
+                        id="edit-memo"
+                        rows={4}
+                        value={editData.memo || ''}
+                        onChange={(e) => setEditData({ ...editData, memo: e.target.value })}
+                        placeholder="메모를 입력하세요"
+                      />
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                      <Mail className="w-5 h-5 text-muted-foreground" />
+                      <div>
+                        <p className="text-muted-foreground">이메일</p>
+                        <p className="text-foreground">{cardData.email}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                      <Phone className="w-5 h-5 text-muted-foreground" />
+                      <div>
+                        <p className="text-muted-foreground">전화번호</p>
+                        <p className="text-foreground">{cardData.phone}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                      <Building2 className="w-5 h-5 text-muted-foreground" />
+                      <div>
+                        <p className="text-muted-foreground">회사</p>
+                        <p className="text-foreground">{cardData.company}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                      <Calendar className="w-5 h-5 text-muted-foreground" />
+                      <div>
+                        <p className="text-muted-foreground">등록일</p>
+                        <p className="text-foreground">{cardData.date}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="pt-4 border-t border-border">
                   <p className="text-muted-foreground mb-2">문의 유형</p>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -37,6 +37,8 @@ export default function AIInsights({ onNavigate }: AIInsightsPageProps) {
   const [hasResult, setHasResult] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [contacts, setContacts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [editableData, setEditableData] = useState({
     overview: "",
     industry: "",
@@ -63,17 +65,56 @@ export default function AIInsights({ onNavigate }: AIInsightsPageProps) {
     };
   });
 
+  // Load contacts data
+  useEffect(() => {
+    loadContacts();
+  }, []);
+
+  const loadContacts = async () => {
+    try {
+      setLoading(true);
+      console.log('=== Loading contacts for AI insights ===');
+      
+      const response = await fetch('/api/contacts');
+      const result = await response.json();
+      
+      console.log('Contacts API response:', result);
+      console.log('Contacts count:', result.contacts?.length || 0);
+      console.log('Sample contact:', result.contacts?.[0]);
+      
+      if (result.ok && result.contacts) {
+        setContacts(result.contacts);
+        console.log('Contacts loaded successfully:', result.contacts.length);
+      } else {
+        console.error('Failed to load contacts:', result.error);
+        toast.error(result.error || '연락처 목록을 불러오는데 실패했습니다');
+        setContacts([]);
+      }
+    } catch (error: any) {
+      console.error('Failed to load contacts:', error);
+      toast.error('연락처 목록을 불러오는데 실패했습니다');
+      setContacts([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
 
-  // 회사 목록 (중복 제거)
-  const companies = Array.from(new Set(MOCK_CARDS.map(card => card.company))).map(company => {
-    const card = MOCK_CARDS.find(c => c.company === company);
+
+  // 회사 목록 (중복 제거) - 실제 데이터 사용
+  const companies = Array.from(new Set(contacts.map(contact => contact.company).filter(Boolean))).map(company => {
     return {
       value: company,
       label: company,
-      contacts: MOCK_CARDS.filter(c => c.company === company).length,
+      contacts: contacts.filter(c => c.company === company).length,
     };
   });
+
+  // 디버깅을 위한 로그
+  console.log('=== AI Insights Debug Info ===');
+  console.log('Contacts state:', contacts);
+  console.log('Companies derived:', companies);
+  console.log('Loading state:', loading);
 
   // 검색 필터링된 회사 목록
   const filteredCompanies = companies.filter(company =>
@@ -122,16 +163,40 @@ export default function AIInsights({ onNavigate }: AIInsightsPageProps) {
     ],
   });
 
-  const handleAnalyze = (company: string) => {
+  const handleAnalyze = async (company: string) => {
     setSelectedCompany(company);
     setSearchQuery("");
     setIsAnalyzing(true);
     
-    setTimeout(() => {
+    try {
+      console.log('Starting AI analysis for:', company);
+      
+      const response = await fetch('/api/ai-analysis', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ companyName: company })
+      });
+      
+      const result = await response.json();
+      
+      console.log('AI Analysis response:', result);
+      
+      if (result.ok && result.analysis) {
+        setAnalysisResult(result.analysis);
+        setHasResult(true);
+        toast.success("AI 분석이 완료되었습니다");
+      } else {
+        console.error('AI Analysis failed:', result.error);
+        toast.error(result.error || "AI 분석에 실패했습니다");
+      }
+    } catch (error: any) {
+      console.error('AI Analysis error:', error);
+      toast.error("AI 분석 중 오류가 발생했습니다");
+    } finally {
       setIsAnalyzing(false);
-      setHasResult(true);
-      toast.success("AI 분석이 완료되었습니다");
-    }, 3000);
+    }
   };
 
   const handleEdit = () => {
@@ -163,16 +228,37 @@ export default function AIInsights({ onNavigate }: AIInsightsPageProps) {
     toast.info("편집이 취소되었습니다");
   };
 
-  const handleReanalyze = () => {
+  const handleReanalyze = async () => {
+    if (!selectedCompany) return;
+    
     setIsAnalyzing(true);
     setIsEditing(false);
     toast.info("다시 분석 중입니다...");
     
-    setTimeout(() => {
+    try {
+      const response = await fetch('/api/ai-analysis', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ companyName: selectedCompany })
+      });
+      
+      const result = await response.json();
+      
+      if (result.ok && result.analysis) {
+        setAnalysisResult(result.analysis);
+        setHasResult(true);
+        toast.success("AI 재분석이 완료되었습니다");
+      } else {
+        toast.error(result.error || "AI 재분석에 실패했습니다");
+      }
+    } catch (error: any) {
+      console.error('AI Reanalysis error:', error);
+      toast.error("AI 재분석 중 오류가 발생했습니다");
+    } finally {
       setIsAnalyzing(false);
-      setHasResult(true);
-      toast.success("AI 분석이 완료되었습니다");
-    }, 3000);
+    }
   };
 
   return (
@@ -186,6 +272,16 @@ export default function AIInsights({ onNavigate }: AIInsightsPageProps) {
         <p className="text-muted-foreground">
           고객사 정보를 AI가 분석하여 비즈니스 기회를 제안합니다
         </p>
+        
+        {/* 디버깅 정보 표시 */}
+        <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+          로드된 연락처: {contacts.length}개 | 회사: {companies.length}개
+          {companies.length > 0 && (
+            <div className="mt-1">
+              회사 목록: {companies.map(c => c.label).join(', ')}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Company Search */}
@@ -210,7 +306,12 @@ export default function AIInsights({ onNavigate }: AIInsightsPageProps) {
           {/* Search Results */}
           {isFocused && (
             <div className="border border-border rounded-lg overflow-hidden max-h-80 overflow-y-auto">
-              {filteredCompanies.length > 0 ? (
+              {loading ? (
+                <div className="p-8 text-center text-muted-foreground">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto mb-2"></div>
+                  연락처 목록을 불러오는 중...
+                </div>
+              ) : filteredCompanies.length > 0 ? (
                 <div className="divide-y divide-border">
                   {filteredCompanies.map((company) => (
                     <div

@@ -27,7 +27,7 @@ interface CustomersPageProps {
 export default function Customers({ onNavigate }: CustomersPageProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [importanceFilter, setImportanceFilter] = useState("all");
-  const [verticalFilter, setVerticalFilter] = useState("all");
+  // const [verticalFilter, setVerticalFilter] = useState("all");
   const [cards, setCards] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -38,37 +38,41 @@ export default function Customers({ onNavigate }: CustomersPageProps) {
   const loadCards = async () => {
     try {
       setLoading(true);
-      // Mock data - in a real app with auth, this would call: await cardsApi.list(accessToken);
-      const mockCards = [
-        {
-          id: '1',
-          name: '홍길동',
-          title: '대표이사',
-          company: '테크놀로지',
-          vertical: 'IT',
-          importance: 5,
-          phone: '010-1234-5678',
-          email: 'hong@tech.com',
-          inquiryTypes: ['신규 프로젝트', '기술 협력'],
-          date: '2024.03.15'
-        },
-        {
-          id: '2', 
-          name: '김철수',
-          title: '부장',
-          company: '바이오메드',
-          vertical: 'bio',
-          importance: 3,
-          phone: '010-9876-5432',
-          email: 'kim@biomed.com',
-          inquiryTypes: ['파트너십'],
-          date: '2024.03.10'
-        }
-      ];
-      setCards(mockCards);
+      console.log('Loading contacts from API...');
+      
+      const response = await fetch('/api/contacts');
+      const result = await response.json();
+      
+      console.log('Contacts API response:', result);
+      
+      if (result.ok && result.contacts) {
+        // Supabase 데이터를 UI에 맞게 변환
+        const transformedCards = result.contacts.map((contact: any) => ({
+          id: contact.id,
+          name: contact.name,
+          title: contact.title || '',
+          department: contact.department || '',
+          company: contact.company || '',
+          importance: contact.importance,
+          phone: contact.phone || '',
+          email: contact.email || '',
+          inquiryTypes: contact.inquiry_types || [],
+          date: new Date(contact.created_at).toLocaleDateString('ko-KR'),
+          image_path: contact.image_path,
+          memo: contact.memo || ''
+        }));
+        
+        console.log('Transformed cards:', transformedCards);
+        setCards(transformedCards);
+      } else {
+        console.error('Failed to load contacts:', result.error);
+        toast.error(result.error || '명함 목록을 불러오는데 실패했습니다');
+        setCards([]);
+      }
     } catch (error: any) {
       console.error('Failed to load cards:', error);
       toast.error('명함 목록을 불러오는데 실패했습니다');
+      setCards([]);
     } finally {
       setLoading(false);
     }
@@ -80,9 +84,7 @@ export default function Customers({ onNavigate }: CustomersPageProps) {
       card.company?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesImportance =
       importanceFilter === "all" || card.importance?.toString() === importanceFilter;
-    const matchesVertical =
-      verticalFilter === "all" || card.vertical === verticalFilter;
-    return matchesSearch && matchesImportance && matchesVertical;
+    return matchesSearch && matchesImportance;
   });
 
   return (
@@ -118,20 +120,10 @@ export default function Customers({ onNavigate }: CustomersPageProps) {
               />
             </div>
 
-            <Select value={verticalFilter} onValueChange={setVerticalFilter}>
-              <SelectTrigger>
-                <Building2 className="w-4 h-4 mr-2" />
-                <SelectValue placeholder="버티컬" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">전체 산업</SelectItem>
-                {VERTICAL_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* Vertical filter temporarily disabled */}
+            <div className="flex items-center justify-center p-2 border border-border rounded-md bg-muted/50">
+              <span className="text-muted-foreground text-sm">필터 준비 중</span>
+            </div>
 
             <Select value={importanceFilter} onValueChange={setImportanceFilter}>
               <SelectTrigger>
@@ -168,14 +160,24 @@ export default function Customers({ onNavigate }: CustomersPageProps) {
             <Card
               key={card.id}
               className="overflow-hidden hover:border-primary/50 transition-colors cursor-pointer"
-              onClick={() => onNavigate && onNavigate("/customer-detail")}
+              onClick={() => onNavigate && onNavigate(`/customer-detail?id=${card.id}`)}
             >
               <div className="aspect-[16/10] bg-muted relative overflow-hidden">
-                <img
-                  src={card.image}
-                  alt={card.name}
-                  className="w-full h-full object-cover"
-                />
+                {card.image_path ? (
+                  <img
+                    src={`https://qmyyyxkpemdjuwtimwsv.supabase.co/storage/v1/object/public/business-cards/${card.image_path}`}
+                    alt={card.name}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      // 이미지 로드 실패 시 기본 이미지 표시
+                      e.currentTarget.style.display = 'none';
+                      e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                    }}
+                  />
+                ) : null}
+                <div className={`w-full h-full flex items-center justify-center bg-muted ${card.image_path ? 'hidden' : ''}`}>
+                  <CreditCard className="w-12 h-12 text-muted-foreground" />
+                </div>
                 <div className="absolute top-2 right-2">
                   <span
                     className={`px-2 py-1 rounded ${getImportanceColor(
@@ -200,11 +202,7 @@ export default function Customers({ onNavigate }: CustomersPageProps) {
                     <Building2 className="w-4 h-4 flex-shrink-0" />
                     <span className="truncate">{card.company}</span>
                   </div>
-                  {card.vertical && (
-                    <Badge variant="outline" className="border-primary/30 text-primary flex-shrink-0">
-                      {getVerticalLabel(card.vertical)}
-                    </Badge>
-                  )}
+                  {/* Vertical badge temporarily disabled */}
                 </div>
 
                 <div className="flex items-center gap-2 text-muted-foreground">

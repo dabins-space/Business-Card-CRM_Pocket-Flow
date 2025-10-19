@@ -72,9 +72,26 @@ export default async function handler(
 
   } catch (error) {
     console.error('OCR Error:', error)
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    })
+    
+    // 더 구체적인 에러 메시지 제공
+    let errorMessage = 'Failed to process image'
+    if (error.message.includes('credentials')) {
+      errorMessage = 'Google Vision API credentials error'
+    } else if (error.message.includes('quota')) {
+      errorMessage = 'Google Vision API quota exceeded'
+    } else if (error.message.includes('permission')) {
+      errorMessage = 'Google Vision API permission denied'
+    }
+    
     res.status(500).json({
       ok: false,
-      error: 'Failed to process image'
+      error: errorMessage,
+      details: error.message
     })
   }
 }

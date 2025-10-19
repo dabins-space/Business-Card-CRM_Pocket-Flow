@@ -33,6 +33,9 @@ export default function CardsUpload({ onNavigate }: UploadPageProps) {
   });
 
   const handleUpload = async (uploadedFile: File) => {
+    console.log('=== handleUpload called ===');
+    console.log('File:', uploadedFile.name, uploadedFile.size, uploadedFile.type);
+    
     setFile(uploadedFile);
     setOcrLoading(true);
     
@@ -41,8 +44,10 @@ export default function CardsUpload({ onNavigate }: UploadPageProps) {
       const reader = new FileReader();
       reader.onload = async () => {
         const base64String = reader.result as string;
+        console.log('Base64 string length:', base64String.length);
         
         try {
+          console.log('Calling OCR API...');
           const response = await fetch('/api/ocr', {
             method: 'POST',
             headers: {
@@ -56,6 +61,7 @@ export default function CardsUpload({ onNavigate }: UploadPageProps) {
           console.log('OCR Response:', result);
           
           if (result.ok && result.fields) {
+            console.log('OCR successful, updating form data');
             setFormData({
               ...formData,
               name: result.fields.name || "",
@@ -78,6 +84,13 @@ export default function CardsUpload({ onNavigate }: UploadPageProps) {
         }
       };
       
+      reader.onerror = () => {
+        console.error('FileReader error');
+        toast.error("파일 읽기 중 오류가 발생했습니다");
+        setOcrLoading(false);
+      };
+      
+      console.log('Reading file as data URL...');
       reader.readAsDataURL(uploadedFile);
     } catch (error) {
       console.error('File processing error:', error);
@@ -89,6 +102,7 @@ export default function CardsUpload({ onNavigate }: UploadPageProps) {
   const handleOcrRetry = async () => {
     if (!file) return;
     
+    console.log('=== handleOcrRetry called ===');
     setOcrLoading(true);
     await handleUpload(file);
   };

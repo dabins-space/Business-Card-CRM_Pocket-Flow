@@ -20,9 +20,22 @@ import AdminWhitelistPage from "./pages/admin-whitelist";
 
 function AppContent() {
   const [currentPage, setCurrentPage] = useState("/");
+  const [pageParams, setPageParams] = useState<Record<string, string>>({});
 
   const handleNavigation = (page: string) => {
-    setCurrentPage(page);
+    // URL 파라미터 파싱
+    const [path, queryString] = page.split('?');
+    const params: Record<string, string> = {};
+    
+    if (queryString) {
+      const urlParams = new URLSearchParams(queryString);
+      urlParams.forEach((value, key) => {
+        params[key] = value;
+      });
+    }
+    
+    setCurrentPage(path);
+    setPageParams(params);
   };
 
   const renderPage = () => {
@@ -36,7 +49,7 @@ function AppContent() {
       case "/customers":
         return <CustomersPage onNavigate={handleNavigation} />;
       case "/customer-detail":
-        return <CustomerDetailPage onNavigate={handleNavigation} />;
+        return <CustomerDetailPage onNavigate={handleNavigation} contactId={pageParams.id} />;
       case "/reports":
         return <ReportsPage onNavigate={handleNavigation} />;
       case "/settings":
