@@ -27,7 +27,17 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<SaveContactResponse>
 ) {
+  console.log('=== Save Contact API Handler Started ===')
+  console.log('Method:', req.method)
+  console.log('URL:', req.url)
+  console.log('Headers:', req.headers)
+  
+  // 환경 변수 확인
+  console.log('Supabase URL exists:', !!process.env.NEXT_PUBLIC_SUPABASE_URL)
+  console.log('Service Key exists:', !!process.env.SUPABASE_SERVICE_ROLE_KEY)
+  
   if (req.method !== 'POST') {
+    console.log('Method not allowed, returning 405')
     return res.status(405).json({ ok: false, error: 'Method not allowed' })
   }
 
@@ -46,7 +56,22 @@ export default async function handler(
       memo
     }: SaveContactRequest = req.body
 
+    console.log('Save Contact API received data:', {
+      imageBase64Length: imageBase64?.length,
+      imageExt,
+      name,
+      title,
+      department,
+      company,
+      email,
+      phone,
+      importance,
+      inquiryTypes,
+      memoLength: memo?.length
+    })
+
     if (!imageBase64 || !name) {
+      console.log('Save Contact API: Missing required fields')
       return res.status(400).json({ ok: false, error: 'Image and name are required' })
     }
 
@@ -61,6 +86,7 @@ export default async function handler(
     const imageBuffer = Buffer.from(base64Data, 'base64')
 
     // Upload to Supabase Storage
+    console.log('Save Contact API: Uploading to Supabase Storage')
     const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
       .from('business-cards')
       .upload(filePath, imageBuffer, {
@@ -70,32 +96,41 @@ export default async function handler(
 
     if (uploadError) {
       console.error('Upload error:', uploadError)
-      return res.status(500).json({ ok: false, error: 'Failed to upload image' })
+      return res.status(500).json({ ok: false, error: `Failed to upload image: ${uploadError.message}` })
     }
+    
+    console.log('Save Contact API: Upload successful:', uploadData)
 
     // Insert contact record
+    console.log('Save Contact API: Inserting contact record')
+    const contactRecord = {
+      user_id: null, // Anonymous for now
+      image_path: filePath,
+      name,
+      title,
+      department,
+      company,
+      email,
+      phone,
+      importance,
+      inquiry_types: inquiryTypes,
+      memo
+    }
+    
+    console.log('Save Contact API: Contact record data:', contactRecord)
+    
     const { data: contactData, error: contactError } = await supabaseAdmin
       .from('contacts')
-      .insert({
-        user_id: null, // Anonymous for now
-        image_path: filePath,
-        name,
-        title,
-        department,
-        company,
-        email,
-        phone,
-        importance,
-        inquiry_types: inquiryTypes,
-        memo
-      })
+      .insert(contactRecord)
       .select()
       .single()
 
     if (contactError) {
       console.error('Contact insert error:', contactError)
-      return res.status(500).json({ ok: false, error: 'Failed to save contact' })
+      return res.status(500).json({ ok: false, error: `Failed to save contact: ${contactError.message}` })
     }
+    
+    console.log('Save Contact API: Contact insert successful:', contactData)
 
     // Generate signed URL for preview
     const { data: signedUrlData, error: signedUrlError } = await supabaseAdmin.storage
@@ -106,6 +141,7 @@ export default async function handler(
       console.error('Signed URL error:', signedUrlError)
     }
 
+    console.log('=== Save Contact API Success ===')
     res.status(200).json({
       ok: true,
       id: contactData.id,
@@ -114,9 +150,13 @@ export default async function handler(
 
   } catch (error) {
     console.error('Save contact error:', error)
-    res.status(500).json({
-      ok: false,
-      error: 'Internal server error'
-    })
+    
+    // Ensure we always return JSON, not HTML
+    if (!res.headersSent) {
+      res.status(500).json({
+        ok: false,
+        error: `Internal server error: ${error.message || 'Unknown error'}`
+      })
+    }
   }
 }

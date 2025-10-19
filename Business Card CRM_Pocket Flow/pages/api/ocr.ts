@@ -19,14 +19,18 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<OCRResponse>
 ) {
+  console.log('OCR API called with method:', req.method)
+  
   if (req.method !== 'POST') {
     return res.status(405).json({ ok: false, error: 'Method not allowed' })
   }
 
   try {
     const { imageBase64 } = req.body
+    console.log('OCR API received imageBase64 length:', imageBase64?.length)
 
     if (!imageBase64) {
+      console.log('OCR API: No imageBase64 provided')
       return res.status(400).json({ ok: false, error: 'Image is required' })
     }
 
@@ -34,13 +38,19 @@ export default async function handler(
     const base64Data = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '')
     const imageBuffer = Buffer.from(base64Data, 'base64')
 
+    console.log('OCR API: Getting Vision client')
     const visionClient = getVisionClient()
+    console.log('OCR API: Calling Vision API')
+    
     const [result] = await visionClient.textDetection({
       image: { content: imageBuffer }
     })
 
     const detections = result.textAnnotations
+    console.log('OCR API: Detections count:', detections?.length || 0)
+    
     if (!detections || detections.length === 0) {
+      console.log('OCR API: No text detected')
       return res.status(200).json({
         ok: true,
         fields: {},
@@ -49,7 +59,10 @@ export default async function handler(
     }
 
     const fullText = detections[0].description || ''
+    console.log('OCR API: Extracted text:', fullText)
+    
     const extractedFields = extractFieldsFromText(fullText)
+    console.log('OCR API: Extracted fields:', extractedFields)
 
     res.status(200).json({
       ok: true,

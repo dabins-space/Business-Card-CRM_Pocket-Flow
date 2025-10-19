@@ -32,38 +32,130 @@ export default function CardsUpload({ onNavigate }: UploadPageProps) {
     memo: "",
   });
 
-  const handleUpload = (uploadedFile: File) => {
+  const handleUpload = async (uploadedFile: File) => {
     setFile(uploadedFile);
-    // Mock OCR processing
     setOcrLoading(true);
-    setTimeout(() => {
-      setFormData({
-        ...formData,
-        name: "김철수",
-        position: "팀장",
-        department: "개발팀",
-        company: "테크코퍼레이션",
-        email: "kim@techcorp.com",
-        phone: "010-1234-5678",
-      });
+    
+    try {
+      // Convert file to base64
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64String = reader.result as string;
+        
+        try {
+          const response = await fetch('/api/ocr', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ imageBase64: base64String }),
+          });
+          
+          console.log('OCR Response status:', response.status);
+          const result = await response.json();
+          console.log('OCR Response:', result);
+          
+          if (result.ok && result.fields) {
+            setFormData({
+              ...formData,
+              name: result.fields.name || "",
+              position: result.fields.title || "",
+              department: result.fields.department || "",
+              company: result.fields.company || "",
+              email: result.fields.email || "",
+              phone: result.fields.phone || "",
+            });
+            toast.success("OCR 분석이 완료되었습니다");
+          } else {
+            console.error('OCR Error:', result);
+            toast.error(result.error || "OCR 분석에 실패했습니다");
+          }
+        } catch (error) {
+          console.error('OCR API Error:', error);
+          toast.error(`OCR 분석 중 오류가 발생했습니다: ${error.message}`);
+        } finally {
+          setOcrLoading(false);
+        }
+      };
+      
+      reader.readAsDataURL(uploadedFile);
+    } catch (error) {
+      console.error('File processing error:', error);
+      toast.error("파일 처리 중 오류가 발생했습니다");
       setOcrLoading(false);
-      toast.success("OCR 분석이 완료되었습니다");
-    }, 2000);
+    }
   };
 
-  const handleOcrRetry = () => {
+  const handleOcrRetry = async () => {
+    if (!file) return;
+    
     setOcrLoading(true);
-    setTimeout(() => {
-      setOcrLoading(false);
-      toast.success("OCR 재분석이 완료되었습니다");
-    }, 2000);
+    await handleUpload(file);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success("명함이 저장되었습니다");
-    if (onNavigate) {
-      onNavigate("/customers");
+    
+    if (!file) {
+      toast.error("명함 이미지를 업로드해주세요");
+      return;
+    }
+    
+    try {
+      // Convert file to base64
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64String = reader.result as string;
+        const imageExt = file.name.split('.').pop() || 'jpg';
+        
+        try {
+          const saveData = {
+            imageBase64: base64String,
+            imageExt,
+            name: formData.name,
+            title: formData.position,
+            department: formData.department,
+            company: formData.company,
+            email: formData.email,
+            phone: formData.phone,
+            importance: parseInt(formData.importance),
+            inquiryTypes: formData.inquiryTypes,
+            memo: formData.memo,
+          };
+          
+          console.log('Saving contact data:', saveData);
+          
+          const response = await fetch('/api/save-contact', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(saveData),
+          });
+          
+          console.log('Save Response status:', response.status);
+          const result = await response.json();
+          console.log('Save Response:', result);
+          
+          if (result.ok) {
+            toast.success("명함이 저장되었습니다");
+            if (onNavigate) {
+              onNavigate("/customers");
+            }
+          } else {
+            console.error('Save Error:', result);
+            toast.error(result.error || "명함 저장에 실패했습니다");
+          }
+        } catch (error) {
+          console.error('Save contact error:', error);
+          toast.error(`명함 저장 중 오류가 발생했습니다: ${error.message}`);
+        }
+      };
+      
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('File processing error:', error);
+      toast.error("파일 처리 중 오류가 발생했습니다");
     }
   };
 

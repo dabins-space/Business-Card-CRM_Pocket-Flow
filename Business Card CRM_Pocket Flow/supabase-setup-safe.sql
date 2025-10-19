@@ -1,7 +1,20 @@
--- Supabase 설정 스크립트
+-- Supabase 안전한 설정 스크립트
 -- 이 스크립트를 Supabase SQL Editor에서 실행하세요
 
--- 1. Storage 버킷 생성 (이미 존재하면 무시)
+-- 1. 기존 정책들 삭제 (오류 무시)
+DROP POLICY IF EXISTS "Users can view own contacts" ON contacts;
+DROP POLICY IF EXISTS "Users can insert contacts" ON contacts;
+DROP POLICY IF EXISTS "Users can update own contacts" ON contacts;
+DROP POLICY IF EXISTS "Users can delete own contacts" ON contacts;
+DROP POLICY IF EXISTS "Anonymous users can insert contacts" ON contacts;
+
+DROP POLICY IF EXISTS "Users can upload business card images" ON storage.objects;
+DROP POLICY IF EXISTS "Users can view own business card images" ON storage.objects;
+DROP POLICY IF EXISTS "Users can delete own business card images" ON storage.objects;
+DROP POLICY IF EXISTS "Anonymous users can upload business card images" ON storage.objects;
+DROP POLICY IF EXISTS "Anonymous users can view uploaded images" ON storage.objects;
+
+-- 2. Storage 버킷 생성 (이미 존재하면 무시)
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
   'business-cards',
@@ -12,7 +25,7 @@ VALUES (
 )
 ON CONFLICT (id) DO NOTHING;
 
--- 2. contacts 테이블 생성
+-- 3. contacts 테이블 생성
 CREATE TABLE IF NOT EXISTS contacts (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
@@ -30,16 +43,16 @@ CREATE TABLE IF NOT EXISTS contacts (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. 인덱스 생성
+-- 4. 인덱스 생성
 CREATE INDEX IF NOT EXISTS idx_contacts_user_id ON contacts(user_id);
 CREATE INDEX IF NOT EXISTS idx_contacts_created_at ON contacts(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_contacts_company ON contacts(company);
 CREATE INDEX IF NOT EXISTS idx_contacts_name ON contacts(name);
 
--- 4. RLS (Row Level Security) 활성화
+-- 5. RLS (Row Level Security) 활성화
 ALTER TABLE contacts ENABLE ROW LEVEL SECURITY;
 
--- 5. RLS 정책 생성
+-- 6. RLS 정책 생성
 -- 정책 1: 인증된 사용자는 자신이 생성한 연락처만 조회 가능
 CREATE POLICY "Users can view own contacts" ON contacts
   FOR SELECT USING (
@@ -47,7 +60,7 @@ CREATE POLICY "Users can view own contacts" ON contacts
     (user_id = auth.uid() OR user_id IS NULL)
   );
 
--- 정책 2: 인증된 사용자는 연락처 생성 가능 (user_id는 자동으로 설정)
+-- 정책 2: 인증된 사용자는 연락처 생성 가능
 CREATE POLICY "Users can insert contacts" ON contacts
   FOR INSERT WITH CHECK (
     auth.uid() IS NOT NULL AND 
@@ -68,7 +81,7 @@ CREATE POLICY "Users can delete own contacts" ON contacts
     user_id = auth.uid()
   );
 
--- 6. 익명 사용자를 위한 정책 (활성화)
+-- 정책 5: 익명 사용자는 연락처 생성 가능
 CREATE POLICY "Anonymous users can insert contacts" ON contacts
   FOR INSERT WITH CHECK (user_id IS NULL);
 
@@ -81,13 +94,14 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
+DROP TRIGGER IF EXISTS update_contacts_updated_at ON contacts;
 CREATE TRIGGER update_contacts_updated_at
   BEFORE UPDATE ON contacts
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
 -- 8. Storage 정책 생성
--- Storage 버킷에 대한 정책
+-- 인증된 사용자 정책
 CREATE POLICY "Users can upload business card images" ON storage.objects
   FOR INSERT WITH CHECK (
     bucket_id = 'business-cards' AND
@@ -106,7 +120,7 @@ CREATE POLICY "Users can delete own business card images" ON storage.objects
     auth.uid() IS NOT NULL
   );
 
--- 9. 익명 사용자를 위한 Storage 정책 (활성화)
+-- 익명 사용자 정책
 CREATE POLICY "Anonymous users can upload business card images" ON storage.objects
   FOR INSERT WITH CHECK (
     bucket_id = 'business-cards'
@@ -117,5 +131,5 @@ CREATE POLICY "Anonymous users can view uploaded images" ON storage.objects
     bucket_id = 'business-cards'
   );
 
--- 10. 완료 메시지
+-- 9. 완료 메시지
 SELECT 'Supabase setup completed successfully!' as message;
