@@ -19,7 +19,7 @@ Body: ${text}
       `);
       
     } catch (error) {
-      setResult(`Basic API Error: ${error.message}`);
+      setResult(`Basic API Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
@@ -54,7 +54,7 @@ Body: ${text}
       `);
       
     } catch (error) {
-      setResult(`Simple Save Contact API Error: ${error.message}`);
+      setResult(`Simple Save Contact API Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
@@ -97,7 +97,7 @@ Body: ${text}
       `);
       
     } catch (error) {
-      setResult(`Save Contact API Error: ${error.message}`);
+      setResult(`Save Contact API Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
     }

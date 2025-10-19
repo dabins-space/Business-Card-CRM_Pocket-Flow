@@ -534,7 +534,7 @@ export default function CustomerDetail({ onNavigate, contactId }: CustomerDetail
                 <div className="pt-4 border-t border-border">
                   <p className="text-muted-foreground mb-2">문의 유형</p>
                   <div className="flex flex-wrap gap-2">
-                    {cardData.inquiryTypes.map((type, index) => (
+                    {cardData.inquiryTypes.map((type: string, index: number) => (
                       <Badge key={index} variant="secondary">
                         {type}
                       </Badge>

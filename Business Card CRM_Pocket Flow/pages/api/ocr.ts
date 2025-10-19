@@ -13,6 +13,7 @@ interface OCRResponse {
   }
   rawText?: string
   error?: string
+  details?: string
 }
 
 export default async function handler(

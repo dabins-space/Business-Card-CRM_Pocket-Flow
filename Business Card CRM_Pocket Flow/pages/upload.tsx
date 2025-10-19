@@ -78,7 +78,7 @@ export default function CardsUpload({ onNavigate }: UploadPageProps) {
           }
         } catch (error) {
           console.error('OCR API Error:', error);
-          toast.error(`OCR 분석 중 오류가 발생했습니다: ${error.message}`);
+          toast.error(`OCR 분석 중 오류가 발생했습니다: ${error instanceof Error ? error.message : 'Unknown error'}`);
         } finally {
           setOcrLoading(false);
         }
@@ -162,7 +162,7 @@ export default function CardsUpload({ onNavigate }: UploadPageProps) {
           }
         } catch (error) {
           console.error('Save contact error:', error);
-          toast.error(`명함 저장 중 오류가 발생했습니다: ${error.message}`);
+          toast.error(`명함 저장 중 오류가 발생했습니다: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       };
       
