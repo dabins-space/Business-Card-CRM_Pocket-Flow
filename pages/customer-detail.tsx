@@ -280,7 +280,7 @@ export default function CustomerDetail({ onNavigate, contactId }: CustomerDetail
 
       if (result.ok) {
         // 로컬 상태 업데이트
-        setCardData(prev => ({
+        setCardData((prev: any) => ({
           ...prev,
           memo: updatedMemo
         }));
@@ -387,7 +387,7 @@ export default function CustomerDetail({ onNavigate, contactId }: CustomerDetail
 
       if (result.ok) {
         // 로컬 상태 업데이트
-        setCardData(prev => ({
+        setCardData((prev: any) => ({
           ...prev,
           memo: updatedMemo
         }));
