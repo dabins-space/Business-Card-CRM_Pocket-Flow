@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { uploadCardImage } from '../lib/upload-card-image';
 
 export default function TestAPI() {
   const [result, setResult] = useState<string>('');
@@ -65,9 +66,16 @@ Body: ${text}
     setResult('Testing save-contact API...');
     
     try {
+      // Create a test file for upload
+      const testFile = new File(['test image data'], 'test-image.jpg', { type: 'image/jpeg' });
+      
+      // Upload test image to Supabase Storage
+      setResult('Uploading test image to Supabase Storage...');
+      const userId = 'test-user';
+      const uploadResult = await uploadCardImage(testFile, userId);
+      
       const testData = {
-        imageBase64: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k=',
-        imageExt: 'jpg',
+        imageUrl: uploadResult.publicUrl,
         name: 'Test User',
         title: 'Test Title',
         department: 'Test Dept',
@@ -79,6 +87,7 @@ Body: ${text}
         memo: 'Test memo'
       };
 
+      setResult('Testing save-contact API with uploaded image...');
       const response = await fetch('/api/save-contact', {
         method: 'POST',
         headers: {
@@ -91,7 +100,8 @@ Body: ${text}
       
       setResult(`
 Save Contact API Test:
-Status: ${response.status}
+Upload Result: ${JSON.stringify(uploadResult, null, 2)}
+API Status: ${response.status}
 Headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2)}
 Body: ${text}
       `);

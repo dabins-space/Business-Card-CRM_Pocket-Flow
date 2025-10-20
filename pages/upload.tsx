@@ -12,6 +12,7 @@ import { MultiSelect } from "../components/MultiSelect";
 import { INQUIRY_TYPE_OPTIONS } from "../constants/data";
 import { Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { uploadCardImage } from "../lib/upload-card-image";
 
 interface UploadPageProps {
   onNavigate?: (page: string) => void;
@@ -19,6 +20,7 @@ interface UploadPageProps {
 
 export default function CardsUpload({ onNavigate }: UploadPageProps) {
   const [file, setFile] = useState<File | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
@@ -40,7 +42,14 @@ export default function CardsUpload({ onNavigate }: UploadPageProps) {
     setOcrLoading(true);
     
     try {
-      // Convert file to base64
+      // Upload image to Supabase Storage first
+      console.log('Uploading image to Supabase Storage...');
+      const userId = 'current-user'; // TODO: Get actual user ID from auth context
+      const uploadResult = await uploadCardImage(uploadedFile, userId);
+      console.log('Upload result:', uploadResult);
+      setImageUrl(uploadResult.publicUrl);
+      
+      // Convert file to base64 for OCR
       const reader = new FileReader();
       reader.onload = async () => {
         const base64String = reader.result as string;
@@ -110,66 +119,51 @@ export default function CardsUpload({ onNavigate }: UploadPageProps) {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!file) {
+    if (!file || !imageUrl) {
       toast.error("명함 이미지를 업로드해주세요");
       return;
     }
     
     try {
-      // Convert file to base64
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const base64String = reader.result as string;
-        const imageExt = file.name.split('.').pop() || 'jpg';
-        
-        try {
-          const saveData = {
-            imageBase64: base64String,
-            imageExt,
-            name: formData.name,
-            title: formData.position,
-            department: formData.department,
-            company: formData.company,
-            email: formData.email,
-            phone: formData.phone,
-            importance: parseInt(formData.importance),
-            inquiryTypes: formData.inquiryTypes,
-            memo: formData.memo,
-          };
-          
-          console.log('Saving contact data:', saveData);
-          
-          const response = await fetch('/api/save-contact', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(saveData),
-          });
-          
-          console.log('Save Response status:', response.status);
-          const result = await response.json();
-          console.log('Save Response:', result);
-          
-          if (result.ok) {
-            toast.success("명함이 저장되었습니다");
-            if (onNavigate) {
-              onNavigate("/customers");
-            }
-          } else {
-            console.error('Save Error:', result);
-            toast.error(result.error || "명함 저장에 실패했습니다");
-          }
-        } catch (error) {
-          console.error('Save contact error:', error);
-          toast.error(`명함 저장 중 오류가 발생했습니다: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
+      const saveData = {
+        imageUrl,
+        name: formData.name,
+        title: formData.position,
+        department: formData.department,
+        company: formData.company,
+        email: formData.email,
+        phone: formData.phone,
+        importance: parseInt(formData.importance),
+        inquiryTypes: formData.inquiryTypes,
+        memo: formData.memo,
       };
       
-      reader.readAsDataURL(file);
+      console.log('Saving contact data:', saveData);
+      
+      const response = await fetch('/api/save-contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(saveData),
+      });
+      
+      console.log('Save Response status:', response.status);
+      const result = await response.json();
+      console.log('Save Response:', result);
+      
+      if (result.ok) {
+        toast.success("명함이 저장되었습니다");
+        if (onNavigate) {
+          onNavigate("/customers");
+        }
+      } else {
+        console.error('Save Error:', result);
+        toast.error(result.error || "명함 저장에 실패했습니다");
+      }
     } catch (error) {
-      console.error('File processing error:', error);
-      toast.error("파일 처리 중 오류가 발생했습니다");
+      console.error('Save contact error:', error);
+      toast.error(`명함 저장 중 오류가 발생했습니다: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 

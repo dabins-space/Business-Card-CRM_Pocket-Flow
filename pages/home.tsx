@@ -12,6 +12,7 @@ import { INQUIRY_TYPE_OPTIONS } from "../constants/data";
 import { Camera, Loader2, Sparkles, CheckCircle2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { cardsApi } from "../utils/api";
+import { uploadCardImage } from "../lib/upload-card-image";
 
 interface HomePageProps {
   onNavigate?: (page: string) => void;
@@ -19,6 +20,8 @@ interface HomePageProps {
 
 export default function Home({ onNavigate }: HomePageProps) {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [capturedFile, setCapturedFile] = useState<File | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrComplete, setOcrComplete] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -45,12 +48,27 @@ export default function Home({ onNavigate }: HomePageProps) {
     }
   };
 
-  const handleImageCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setCapturedFile(file);
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setCapturedImage(reader.result as string);
+      reader.onloadend = async () => {
+        const imageDataUrl = reader.result as string;
+        setCapturedImage(imageDataUrl);
+        
+        // Upload image to Supabase Storage
+        try {
+          console.log('Uploading image to Supabase Storage...');
+          const userId = 'current-user'; // TODO: Get actual user ID from auth context
+          const uploadResult = await uploadCardImage(file, userId);
+          console.log('Upload result:', uploadResult);
+          setImageUrl(uploadResult.publicUrl);
+        } catch (error) {
+          console.error('Upload error:', error);
+          toast.error("이미지 업로드 중 오류가 발생했습니다");
+        }
+        
         startOCR();
       };
       reader.readAsDataURL(file);
@@ -104,6 +122,8 @@ export default function Home({ onNavigate }: HomePageProps) {
 
   const handleRetake = () => {
     setCapturedImage(null);
+    setCapturedFile(null);
+    setImageUrl(null);
     setOcrLoading(false);
     setOcrComplete(false);
     setSaved(false);
@@ -124,7 +144,7 @@ export default function Home({ onNavigate }: HomePageProps) {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!capturedImage) {
+    if (!capturedImage || !imageUrl) {
       toast.error("이미지를 먼저 촬영해주세요");
       return;
     }
@@ -132,17 +152,13 @@ export default function Home({ onNavigate }: HomePageProps) {
     setSaving(true);
 
     try {
-      // Get file extension from captured image
-      const fileExt = capturedImage.split(';')[0].split('/')[1] || 'jpg';
-
       const response = await fetch("/api/save-contact", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          imageBase64: capturedImage,
-          imageExt: fileExt,
+          imageUrl,
           name: formData.name,
           title: formData.position,
           department: formData.department,
