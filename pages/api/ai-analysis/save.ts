@@ -70,6 +70,9 @@ export default async function handler(
 
     console.log('AI analysis saved successfully:', savedAnalysis.id);
 
+    // AI 분석 결과는 히스토리에만 저장하고 연락처 메모에는 추가하지 않음
+    console.log('AI analysis saved to history only, not added to contact memos');
+
     res.status(200).json({
       ok: true,
       id: savedAnalysis.id

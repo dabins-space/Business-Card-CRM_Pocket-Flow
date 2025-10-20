@@ -333,6 +333,57 @@ export default function AIInsights({ onNavigate }: AIInsightsPageProps) {
     }
   };
 
+  const handleSaveToHistory = async () => {
+    if (!selectedCompany || !analysisResult) {
+      toast.error("저장할 분석 결과가 없습니다");
+      return;
+    }
+    
+    try {
+      // 1. 히스토리에 저장
+      const saveResponse = await fetch('/api/ai-analysis/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          companyName: selectedCompany, 
+          analysis: analysisResult 
+        })
+      });
+      
+      const saveResult = await saveResponse.json();
+      
+      if (!saveResult.ok) {
+        toast.error(saveResult.error || "히스토리 저장에 실패했습니다");
+        return;
+      }
+
+      // 2. 고객 정보에 AI 분석 결과 적용
+      const applyResponse = await fetch('/api/ai-analysis/apply-to-contacts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          companyName: selectedCompany, 
+          analysis: analysisResult 
+        })
+      });
+      
+      const applyResult = await applyResponse.json();
+      
+      if (applyResult.ok) {
+        toast.success("분석 결과가 히스토리에 저장되었습니다");
+      } else {
+        toast.success("분석 결과가 히스토리에 저장되었습니다");
+      }
+    } catch (error: any) {
+      console.error('Save to history error:', error);
+      toast.error("히스토리 저장 중 오류가 발생했습니다");
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       {/* Header */}
@@ -807,7 +858,10 @@ export default function AIInsights({ onNavigate }: AIInsightsPageProps) {
                   <RotateCcw className="w-4 h-4" />
                   삭제하고 다시 분석하기
                 </Button>
-                <Button className="flex-1">
+                <Button 
+                  className="flex-1"
+                  onClick={handleSaveToHistory}
+                >
                   히스토리에 저장
                 </Button>
               </div>

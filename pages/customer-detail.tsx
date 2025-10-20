@@ -57,9 +57,28 @@ export default function CustomerDetail({ onNavigate, contactId }: CustomerDetail
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<any>({});
   const [saving, setSaving] = useState(false);
+  const [aiInsight, setAiInsight] = useState<any>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [contactHistory, setContactHistory] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [isEditingMemo, setIsEditingMemo] = useState(false);
+  const [editingMemoId, setEditingMemoId] = useState<string | null>(null);
+  const [editingMemoContent, setEditingMemoContent] = useState('');
 
   useEffect(() => {
     loadContactData();
+  }, [contactId]);
+
+  useEffect(() => {
+    if (cardData?.company) {
+      loadAIAnalysis();
+    }
+  }, [cardData?.company]);
+
+  useEffect(() => {
+    if (contactId) {
+      loadContactHistory();
+    }
   }, [contactId]);
 
   const loadContactData = async () => {
@@ -110,58 +129,93 @@ export default function CustomerDetail({ onNavigate, contactId }: CustomerDetail
     }
   };
 
-  const companyInfo = {
-    name: "테크코퍼레이션",
-    vertical: "it",
-    industry: "소프트웨어 개발",
-    employees: "50-100명",
-    founded: "2015년",
-    website: "www.techcorp.com",
+  const loadAIAnalysis = async () => {
+    if (!cardData?.company) return;
+    
+    try {
+      setAiLoading(true);
+      
+      const response = await fetch('/api/ai-analysis/get-latest', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ companyName: cardData.company })
+      });
+      
+      const result = await response.json();
+      
+      if (result.ok && result.analysis) {
+        setAiInsight(result.analysis);
+      } else {
+        // AI 분석 결과가 없는 경우 기본값 설정
+        setAiInsight({
+          overview: "AI 분석 결과가 없습니다. AI 인사이트 페이지에서 분석을 실행해주세요.",
+          lastAnalyzed: "분석 없음",
+          opportunities: [],
+          proposalPoints: []
+        });
+      }
+    } catch (error: any) {
+      console.error('Failed to load AI analysis:', error);
+      setAiInsight({
+        overview: "AI 분석 결과를 불러오는데 실패했습니다.",
+        lastAnalyzed: "오류",
+        opportunities: [],
+        proposalPoints: []
+      });
+    } finally {
+      setAiLoading(false);
+    }
   };
 
-  const aiInsight = {
-    overview:
-      "테크코퍼레이션은 엔터프라이즈급 B2B SaaS 솔루션을 전문으로 하는 중견 소프트웨어 개발 회사입니다.",
-    opportunities: [
-      {
-        id: 1,
-        title: "API 통합 파트너십",
-        description: "당사의 결제 솔루션과 협업 플랫폼 통합 가능성",
-        priority: "high",
-      },
-      {
-        id: 2,
-        title: "공동 마케팅 캠페인",
-        description: "B2B 시장 공동 마케팅 기회",
-        priority: "medium",
-      },
-    ],
-    lastAnalyzed: "2025-10-17",
+  const loadContactHistory = async () => {
+    if (!contactId) return;
+    
+    try {
+      setHistoryLoading(true);
+      console.log('Loading contact history for ID:', contactId);
+      
+      const response = await fetch(`/api/contact/${contactId}/history`);
+      const result = await response.json();
+      
+      console.log('History API response:', result);
+      
+      if (result.ok && result.history) {
+        console.log('History loaded successfully:', result.history.length, 'items');
+        setContactHistory(result.history);
+      } else {
+        console.error('Failed to load contact history:', result.error);
+        setContactHistory([]);
+      }
+    } catch (error: any) {
+      console.error('Failed to load contact history:', error);
+      setContactHistory([]);
+    } finally {
+      setHistoryLoading(false);
+    }
   };
 
-  const history = [
-    {
-      id: 1,
-      date: "2025-10-17",
-      type: "memo",
-      title: "프로젝트 협업 제안",
-      content: "클라우드 마이그레이션 프로젝트 협업 논의. 긍정적 반응.",
-    },
-    {
-      id: 2,
-      date: "2025-10-10",
-      type: "ai-insight",
-      title: "AI 인사이트 생성",
-      content: "회사 분석 및 비즈니스 기회 도출 완료",
-    },
-    {
-      id: 3,
-      date: "2025-10-05",
-      type: "memo",
-      title: "기술 스택 논의",
-      content: "React, Node.js 기반 기술 스택 공유 및 협업 가능성 타진",
-    },
-  ];
+  // companyInfo는 이제 실제 데이터로 동적 생성
+  const companyInfo = cardData ? {
+    name: cardData.company || "정보 없음",
+    vertical: aiInsight?.industry || "정보 없음",
+    industry: aiInsight?.industry || "정보 없음",
+    employees: aiInsight?.employees || "정보 없음",
+    founded: aiInsight?.founded || "정보 없음",
+    website: aiInsight?.website || "정보 없음",
+  } : {
+    name: "정보 없음",
+    vertical: "정보 없음",
+    industry: "정보 없음",
+    employees: "정보 없음",
+    founded: "정보 없음",
+    website: "정보 없음",
+  };
+
+  // aiInsight는 이제 state로 관리됨
+
+  // 히스토리는 이제 contactHistory state로 관리됨
 
   const handleDelete = async () => {
     if (!contactId) {
@@ -194,13 +248,189 @@ export default function CustomerDetail({ onNavigate, contactId }: CustomerDetail
     }
   };
 
-  const handleAddMemo = () => {
+  const handleAddMemo = async () => {
     if (!newMemo.trim()) {
       toast.error("메모 내용을 입력해주세요");
       return;
     }
-    toast.success("메모가 추가되었습니다");
-    setNewMemo("");
+
+    if (!contactId) {
+      toast.error("연락처 ID가 없습니다");
+      return;
+    }
+
+    try {
+      const currentDate = new Date().toLocaleDateString('ko-KR');
+      const currentTime = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+      
+      // 기존 메모에 새 메모 추가
+      const updatedMemo = cardData.memo 
+        ? `${cardData.memo}\n\n[${currentDate} ${currentTime}] ${newMemo}`
+        : `[${currentDate} ${currentTime}] ${newMemo}`;
+
+      const response = await fetch(`/api/contact/${contactId}/update`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ memo: updatedMemo })
+      });
+
+      const result = await response.json();
+
+      if (result.ok) {
+        // 로컬 상태 업데이트
+        setCardData(prev => ({
+          ...prev,
+          memo: updatedMemo
+        }));
+
+        // 히스토리에 메모 추가 기록
+        try {
+          console.log('Adding memo to history...');
+          const historyResponse = await fetch(`/api/contact/${contactId}/add-history`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              action_type: 'memo_add',
+              title: '메모 추가',
+              content: newMemo,
+              old_value: cardData.memo || '',
+              new_value: updatedMemo
+            })
+          });
+          
+          const historyResult = await historyResponse.json();
+          console.log('History add response:', historyResult);
+          
+          if (historyResult.ok) {
+            console.log('History added successfully');
+          } else {
+            console.error('Failed to add history:', historyResult.error);
+          }
+        } catch (historyError) {
+          console.error('Failed to add history:', historyError);
+          // 히스토리 추가 실패는 메모 추가를 막지 않음
+        }
+
+        toast.success("메모가 추가되었습니다");
+        setNewMemo("");
+        
+        // 히스토리 새로고침
+        loadContactHistory();
+      } else {
+        toast.error(result.error || "메모 추가에 실패했습니다");
+      }
+    } catch (error: any) {
+      console.error('Add memo error:', error);
+      toast.error("메모 추가 중 오류가 발생했습니다");
+    }
+  };
+
+  const handleEditMemo = (memoId: string, currentContent: string) => {
+    setEditingMemoId(memoId);
+    setEditingMemoContent(currentContent);
+    setIsEditingMemo(true);
+  };
+
+  const handleSaveMemoEdit = async () => {
+    if (!editingMemoId || !editingMemoContent.trim()) {
+      toast.error("메모 내용을 입력해주세요");
+      return;
+    }
+
+    if (!contactId) {
+      toast.error("연락처 ID가 없습니다");
+      return;
+    }
+
+    try {
+      // 현재 메모에서 편집 중인 부분을 찾아서 교체
+      const currentMemo = cardData.memo || '';
+      const memoLines = currentMemo.split('\n');
+      
+      // 편집 중인 메모 라인 찾기 (간단한 방법: ID로 찾기)
+      let updatedMemo = currentMemo;
+      
+      // 더 정확한 방법: 날짜 패턴으로 찾아서 교체
+      const datePattern = /\[\d{4}\/\d{1,2}\/\d{1,2} \d{1,2}:\d{2}\]/g;
+      const matches = [...currentMemo.matchAll(datePattern)];
+      
+      if (matches.length > 0) {
+        // 마지막 메모 항목을 새로운 내용으로 교체
+        const lastMatch = matches[matches.length - 1];
+        const beforeLast = currentMemo.substring(0, lastMatch.index);
+        const afterLast = currentMemo.substring(lastMatch.index! + lastMatch[0].length);
+        
+        // 기존 내용 제거하고 새 내용 추가
+        const lines = afterLast.split('\n');
+        const newLines = lines.slice(1); // 첫 번째 줄(기존 메모 내용) 제거
+        
+        const currentDate = new Date().toLocaleDateString('ko-KR');
+        const currentTime = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+        
+        updatedMemo = beforeLast + lastMatch[0] + ' ' + editingMemoContent + 
+          (newLines.length > 0 ? '\n' + newLines.join('\n') : '');
+      }
+
+      const response = await fetch(`/api/contact/${contactId}/update`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ memo: updatedMemo })
+      });
+
+      const result = await response.json();
+
+      if (result.ok) {
+        // 로컬 상태 업데이트
+        setCardData(prev => ({
+          ...prev,
+          memo: updatedMemo
+        }));
+
+        // 히스토리에 메모 수정 기록
+        try {
+          await fetch(`/api/contact/${contactId}/add-history`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              action_type: 'memo_edit',
+              title: '메모 수정',
+              content: editingMemoContent,
+              old_value: editingMemoContent, // 실제로는 이전 내용이어야 하지만 간단히 처리
+              new_value: editingMemoContent
+            })
+          });
+        } catch (historyError) {
+          console.error('Failed to add history:', historyError);
+        }
+
+        toast.success("메모가 수정되었습니다");
+        setIsEditingMemo(false);
+        setEditingMemoId(null);
+        setEditingMemoContent('');
+        
+        // 히스토리 새로고침
+        loadContactHistory();
+      } else {
+        toast.error(result.error || "메모 수정에 실패했습니다");
+      }
+    } catch (error: any) {
+      console.error('Edit memo error:', error);
+      toast.error("메모 수정 중 오류가 발생했습니다");
+    }
+  };
+
+  const handleCancelMemoEdit = () => {
+    setIsEditingMemo(false);
+    setEditingMemoId(null);
+    setEditingMemoContent('');
   };
 
   const handleEdit = () => {
@@ -224,6 +454,7 @@ export default function CustomerDetail({ onNavigate, contactId }: CustomerDetail
     try {
       setSaving(true);
       console.log('Saving contact data:', editData);
+      console.log('Memo value being saved:', editData.memo);
 
       const response = await fetch(`/api/contact/${contactId}/update`, {
         method: 'PUT',
@@ -235,6 +466,7 @@ export default function CustomerDetail({ onNavigate, contactId }: CustomerDetail
 
       const result = await response.json();
       console.log('Update response:', result);
+      console.log('Updated memo from response:', result.contact?.memo);
 
       if (result.ok && result.contact) {
         // 업데이트된 데이터로 상태 업데이트
@@ -256,6 +488,33 @@ export default function CustomerDetail({ onNavigate, contactId }: CustomerDetail
         
         setIsEditing(false);
         toast.success("연락처 정보가 수정되었습니다");
+        
+        // 히스토리에 정보 수정 기록
+        try {
+          await fetch(`/api/contact/${contactId}/add-history`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              action_type: 'info_update',
+              title: '정보 수정',
+              content: '연락처 기본 정보가 수정되었습니다',
+              old_value: JSON.stringify(cardData),
+              new_value: JSON.stringify(updatedContact)
+            })
+          });
+        } catch (historyError) {
+          console.error('Failed to add history:', historyError);
+        }
+        
+        // 히스토리 새로고침
+        loadContactHistory();
+        
+        // 회사명이 변경된 경우 AI 분석 데이터 다시 로드
+        if (updatedContact.company !== cardData.company) {
+          loadAIAnalysis();
+        }
       } else {
         console.error('Update failed:', result.error);
         toast.error(result.error || "수정에 실패했습니다");
@@ -638,7 +897,25 @@ export default function CustomerDetail({ onNavigate, contactId }: CustomerDetail
                     {/* 메모 */}
                     {cardData.memo && (
                       <div className="p-3 rounded-lg bg-muted/50">
-                        <p className="text-muted-foreground mb-2">메모</p>
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-muted-foreground">메모</p>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              // 마지막 메모 항목의 내용 추출
+                              const memoLines = cardData.memo.split('\n');
+                              const lastMemoLine = memoLines[memoLines.length - 1];
+                              const datePattern = /\[\d{4}\/\d{1,2}\/\d{1,2} \d{1,2}:\d{2}\]/;
+                              const content = lastMemoLine.replace(datePattern, '').trim();
+                              handleEditMemo('last', content);
+                            }}
+                            className="h-6 px-2 text-xs"
+                          >
+                            <Edit className="w-3 h-3 mr-1" />
+                            편집
+                          </Button>
+                        </div>
                         <p className="text-foreground whitespace-pre-wrap">{cardData.memo}</p>
                       </div>
                     )}
@@ -693,7 +970,7 @@ export default function CustomerDetail({ onNavigate, contactId }: CustomerDetail
               <TabsContent value="ai-insight" className="space-y-4 mt-0">
                 <div className="flex items-center justify-between mb-4">
                   <p className="text-muted-foreground">
-                    최근 분석: {aiInsight.lastAnalyzed}
+                    최근 분석: {aiInsight?.lastAnalyzed || "분석 없음"}
                   </p>
                   <Button
                     size="sm"
@@ -702,42 +979,68 @@ export default function CustomerDetail({ onNavigate, contactId }: CustomerDetail
                     className="gap-2"
                   >
                     <Sparkles className="w-4 h-4" />
-                    재분석
+                    {aiInsight?.lastAnalyzed === "분석 없음" ? "분석하기" : "재분석"}
                   </Button>
                 </div>
 
-                <div className="p-4 rounded-lg bg-muted/50 border border-border">
-                  <h4 className="text-foreground mb-2 flex items-center gap-2">
-                    <Building2 className="w-4 h-4" />
-                    회사 개요
-                  </h4>
-                  <p className="text-muted-foreground leading-relaxed">
-                    {aiInsight.overview}
-                  </p>
-                </div>
-
-                <div>
-                  <h4 className="text-foreground mb-3 flex items-center gap-2">
-                    <Lightbulb className="w-4 h-4" />
-                    비즈니스 기회
-                  </h4>
-                  <div className="space-y-3">
-                    {aiInsight.opportunities.map((opportunity) => (
-                      <div
-                        key={opportunity.id}
-                        className="p-4 rounded-lg border border-border"
-                      >
-                        <div className="flex items-start justify-between mb-2">
-                          <h3 className="text-foreground">{opportunity.title}</h3>
-                          <Badge className={getPriorityColor(opportunity.priority)}>
-                            {opportunity.priority === "high" ? "높음" : "중간"}
-                          </Badge>
-                        </div>
-                        <p className="text-muted-foreground">{opportunity.description}</p>
-                      </div>
-                    ))}
+                {aiLoading ? (
+                  <div className="p-8 text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-muted-foreground">AI 분석 결과를 불러오는 중...</p>
                   </div>
-                </div>
+                ) : (
+                  <div className="p-4 rounded-lg bg-muted/50 border border-border">
+                    <h4 className="text-foreground mb-2 flex items-center gap-2">
+                      <Building2 className="w-4 h-4" />
+                      회사 개요
+                    </h4>
+                    <p className="text-muted-foreground leading-relaxed">
+                      {aiInsight?.overview || "AI 분석 결과가 없습니다."}
+                    </p>
+                  </div>
+                )}
+
+                {aiInsight?.opportunities && aiInsight.opportunities.length > 0 && (
+                  <div>
+                    <h4 className="text-foreground mb-3 flex items-center gap-2">
+                      <Lightbulb className="w-4 h-4" />
+                      비즈니스 기회
+                    </h4>
+                    <div className="space-y-3">
+                      {aiInsight.opportunities.map((opportunity: any) => (
+                        <div
+                          key={opportunity.id}
+                          className="p-4 rounded-lg border border-border"
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <h3 className="text-foreground">{opportunity.title}</h3>
+                            <Badge className={getPriorityColor(opportunity.priority)}>
+                              {opportunity.priority === "high" ? "높음" : 
+                               opportunity.priority === "medium" ? "중간" : "낮음"}
+                            </Badge>
+                          </div>
+                          <p className="text-muted-foreground">{opportunity.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {aiInsight?.proposalPoints && aiInsight.proposalPoints.length > 0 && (
+                  <div>
+                    <h4 className="text-foreground mb-3 flex items-center gap-2">
+                      <Target className="w-4 h-4" />
+                      제안 포인트
+                    </h4>
+                    <div className="space-y-2">
+                      {aiInsight.proposalPoints.map((point: string, index: number) => (
+                        <div key={index} className="p-3 rounded-lg bg-muted/30 border border-border">
+                          <p className="text-foreground">{point}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <Button
                   className="w-full gap-2"
@@ -765,29 +1068,78 @@ export default function CustomerDetail({ onNavigate, contactId }: CustomerDetail
                   </Button>
                 </div>
 
+                {/* 메모 편집 모달 */}
+                {isEditingMemo && (
+                  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div className="bg-background p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+                      <h3 className="text-lg font-semibold mb-4">메모 편집</h3>
+                      <Textarea
+                        rows={4}
+                        placeholder="메모 내용을 수정하세요..."
+                        value={editingMemoContent}
+                        onChange={(e) => setEditingMemoContent(e.target.value)}
+                        className="mb-4"
+                      />
+                      <div className="flex gap-2 justify-end">
+                        <Button
+                          variant="outline"
+                          onClick={handleCancelMemoEdit}
+                        >
+                          취소
+                        </Button>
+                        <Button
+                          onClick={handleSaveMemoEdit}
+                          disabled={!editingMemoContent.trim()}
+                        >
+                          저장
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="pt-4 border-t border-border">
                   <h4 className="text-foreground mb-3">타임라인</h4>
-                  <div className="space-y-3">
-                    {history.map((item) => (
-                      <div
-                        key={item.id}
-                        className="p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
-                      >
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            {item.type === "ai-insight" ? (
-                              <Sparkles className="w-4 h-4 text-primary" />
-                            ) : (
-                              <MessageSquare className="w-4 h-4 text-muted-foreground" />
-                            )}
-                            <span className="text-foreground">{item.title}</span>
+                  {historyLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                      <span className="ml-2 text-sm text-muted-foreground">히스토리 로딩 중...</span>
+                    </div>
+                  ) : contactHistory.length > 0 ? (
+                    <div className="space-y-3">
+                      {contactHistory.map((item) => (
+                        <div
+                          key={item.id}
+                          className="p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              {item.action_type === "ai_analysis" ? (
+                                <Sparkles className="w-4 h-4 text-primary" />
+                              ) : item.action_type === "memo_add" ? (
+                                <MessageSquare className="w-4 h-4 text-blue-500" />
+                              ) : item.action_type === "info_update" ? (
+                                <Edit className="w-4 h-4 text-green-500" />
+                              ) : (
+                                <MessageSquare className="w-4 h-4 text-muted-foreground" />
+                              )}
+                              <span className="text-foreground">{item.title}</span>
+                            </div>
+                            <span className="text-muted-foreground">
+                              {new Date(item.created_at).toLocaleDateString('ko-KR')} {new Date(item.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
                           </div>
-                          <span className="text-muted-foreground">{item.date}</span>
+                          <p className="text-muted-foreground pl-6">{item.content}</p>
                         </div>
-                        <p className="text-muted-foreground pl-6">{item.content}</p>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">아직 히스토리가 없습니다</p>
+                      <p className="text-xs">메모를 추가하거나 정보를 수정하면 히스토리가 기록됩니다</p>
+                    </div>
+                  )}
                 </div>
               </TabsContent>
             </CardContent>

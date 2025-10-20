@@ -40,15 +40,20 @@ export default async function handler(
   try {
     const updateData: UpdateContactRequest = req.body
     console.log('Update data:', updateData)
+    console.log('Memo value in update data:', updateData.memo)
 
-    // 빈 값들은 제거
+    // 빈 값들은 제거 (단, memo는 빈 문자열도 허용)
     const cleanedData = Object.fromEntries(
-      Object.entries(updateData).filter(([_, value]) => 
-        value !== null && value !== undefined && value !== ''
-      )
+      Object.entries(updateData).filter(([key, value]) => {
+        if (key === 'memo') {
+          return value !== null && value !== undefined; // memo는 빈 문자열도 허용
+        }
+        return value !== null && value !== undefined && value !== '';
+      })
     )
 
     console.log('Cleaned update data:', cleanedData)
+    console.log('Memo value in cleaned data:', cleanedData.memo)
 
     const { data: contact, error } = await supabaseAdmin
       .from('contacts')
