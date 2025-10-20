@@ -44,17 +44,6 @@ export default async function handler(
         .json({ ok: false, error: 'imageUrl or imageBase64 is required' })
     }
 
-    // 개발 환경 테스트용 (실제 배포 시 제거)
-    if (process.env.NODE_ENV === 'development' && imageBase64 && imageBase64.includes('test')) {
-      const testText = `김철수
-대표이사
-마케팅팀
-삼성전자(주)
-kim@company.com
-010-1234-5678`
-      const fields = extractFieldsFromText(testText)
-      return res.status(200).json({ ok: true, fields, rawText: testText })
-    }
 
     const visionClient = getVisionClient()
 
