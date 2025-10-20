@@ -21,7 +21,8 @@ export const getVisionClient = (): ImageAnnotatorClient => {
       
       visionClient = new ImageAnnotatorClient({
         credentials,
-        projectId: credentials.project_id
+        projectId: credentials.project_id,
+        fallback: true, // ✅ 이 한 줄 추가
       })
       console.log('Vision client created successfully')
     } catch (error) {

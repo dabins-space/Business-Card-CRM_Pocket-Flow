@@ -1,161 +1,124 @@
-import { NextApiRequest, NextApiResponse } from 'next'
+// pages/api/ocr.ts
+import type { NextApiRequest, NextApiResponse } from 'next'
 import { getVisionClient } from '../../lib/googleVision'
 
-interface OCRResponse {
+type OCRFields = {
+  name?: string
+  title?: string
+  department?: string
+  company?: string
+  email?: string
+  phone?: string
+}
+
+type OCRResponse = {
   ok: boolean
-  fields?: {
-    name?: string
-    title?: string
-    department?: string
-    company?: string
-    email?: string
-    phone?: string
-  }
+  fields?: OCRFields
   rawText?: string
   error?: string
   details?: string
+}
+
+// (옵션) 혹시 남아 있을 base64 요청 대비하여 여유치
+export const config = {
+  api: { bodyParser: { sizeLimit: '10mb' } },
 }
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<OCRResponse>
 ) {
-  console.log('OCR API called with method:', req.method)
-  
   if (req.method !== 'POST') {
     return res.status(405).json({ ok: false, error: 'Method not allowed' })
   }
 
   try {
-    const { imageBase64 } = req.body
-    console.log('OCR API received imageBase64 length:', imageBase64?.length)
-
-    if (!imageBase64) {
-      console.log('OCR API: No imageBase64 provided')
-      return res.status(400).json({ ok: false, error: 'Image is required' })
+    const { imageUrl, imageBase64 } = (req.body || {}) as {
+      imageUrl?: string
+      imageBase64?: string
     }
 
-    // Remove data URL prefix if present
-    const base64Data = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '')
-    const imageBuffer = Buffer.from(base64Data, 'base64')
+    if (!imageUrl && !imageBase64) {
+      return res
+        .status(400)
+        .json({ ok: false, error: 'imageUrl or imageBase64 is required' })
+    }
 
-    console.log('OCR API: Getting Vision client')
     const visionClient = getVisionClient()
-    console.log('OCR API: Calling Vision API')
-    
-    const [result] = await visionClient.textDetection({
-      image: { content: imageBuffer }
-    })
 
-    const detections = result.textAnnotations
-    console.log('OCR API: Detections count:', detections?.length || 0)
-    
-    if (!detections || detections.length === 0) {
-      console.log('OCR API: No text detected')
-      return res.status(200).json({
-        ok: true,
-        fields: {},
-        rawText: ''
+    // ---- URL 우선 사용 (권장 플로우: Storage 업로드 → URL 전달) ----
+    let fullText = ''
+    if (imageUrl) {
+      const [result] = await visionClient.textDetection(imageUrl)
+      fullText = result.fullTextAnnotation?.text ?? ''
+    } else if (imageBase64) {
+      // ---- 하위호환: base64도 허용 ----
+      const base64Data = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '')
+      const imageBuffer = Buffer.from(base64Data, 'base64')
+      const [result] = await visionClient.textDetection({
+        image: { content: imageBuffer },
       })
+      fullText = result.fullTextAnnotation?.text ?? ''
     }
 
-    const fullText = detections[0].description || ''
-    console.log('OCR API: Extracted text:', fullText)
-    
-    const extractedFields = extractFieldsFromText(fullText)
-    console.log('OCR API: Extracted fields:', extractedFields)
+    const fields = extractFieldsFromText(fullText)
+    return res.status(200).json({ ok: true, fields, rawText: fullText })
+  } catch (error: any) {
+    const msg = error?.message || 'Failed to process image'
+    let finalMsg = 'Failed to process image'
+    if (msg.includes('credentials')) finalMsg = 'Google Vision API credentials error'
+    else if (msg.includes('quota')) finalMsg = 'Google Vision API quota exceeded'
+    else if (msg.includes('permission')) finalMsg = 'Google Vision API permission denied'
 
-    res.status(200).json({
-      ok: true,
-      fields: extractedFields,
-      rawText: fullText
-    })
-
-  } catch (error) {
-    console.error('OCR Error:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    const errorStack = error instanceof Error ? error.stack : undefined
-    const errorName = error instanceof Error ? error.name : 'Unknown'
-    
-    console.error('Error details:', {
-      message: errorMessage,
-      stack: errorStack,
-      name: errorName
-    })
-    
-    // 더 구체적인 에러 메시지 제공
-    let finalErrorMessage = 'Failed to process image'
-    if (errorMessage.includes('credentials')) {
-      finalErrorMessage = 'Google Vision API credentials error'
-    } else if (errorMessage.includes('quota')) {
-      finalErrorMessage = 'Google Vision API quota exceeded'
-    } else if (errorMessage.includes('permission')) {
-      finalErrorMessage = 'Google Vision API permission denied'
-    }
-    
-    res.status(500).json({
-      ok: false,
-      error: finalErrorMessage,
-      details: errorMessage
-    })
+    return res.status(500).json({ ok: false, error: finalMsg, details: msg })
   }
 }
 
-function extractFieldsFromText(text: string) {
-  const fields: any = {}
+/* -------------------- Parsing helpers -------------------- */
 
-  // Email extraction
+function extractFieldsFromText(text: string): OCRFields {
+  const fields: OCRFields = {}
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean)
+
+  // Email
   const emailRegex = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi
   const emailMatch = text.match(emailRegex)
-  if (emailMatch) {
-    fields.email = emailMatch[0]
-  }
+  if (emailMatch) fields.email = emailMatch[0]
 
-  // Phone extraction (Korean format)
+  // Phone (KR)
   const phoneRegex = /(\+82|0)?[0-9]{2,3}-?[0-9]{3,4}-?[0-9]{4}/g
   const phoneMatch = text.match(phoneRegex)
-  if (phoneMatch) {
-    fields.phone = normalizePhone(phoneMatch[0])
-  }
+  if (phoneMatch) fields.phone = normalizePhone(phoneMatch[0])
 
-  // Company extraction (look for common company indicators)
-  const companyRegex = /(주식회사|(주)|(사)|(회사)|(Corp)|(Inc)|(Ltd)|(Co\.))/gi
-  const lines = text.split('\n')
-  
+  // Company indicators
+  const companyRegex = /(주식회사|\(주\)|\(사\)|회사|Corp|Inc|Ltd|Co\.)/i
   for (const line of lines) {
     if (companyRegex.test(line)) {
-      fields.company = line.trim()
+      fields.company = line
       break
     }
   }
 
-  // Name extraction (usually the first line or after company)
-  if (!fields.name) {
-    const cleanLines = lines.filter(line => line.trim().length > 0)
-    if (cleanLines.length > 0) {
-      // Skip if first line looks like company
-      if (!companyRegex.test(cleanLines[0])) {
-        fields.name = cleanLines[0].trim()
-      } else if (cleanLines.length > 1) {
-        fields.name = cleanLines[1].trim()
-      }
-    }
+  // Name: 첫 줄(회사줄이 아니면) 또는 다음 줄 추정
+  if (!fields.name && lines.length) {
+    if (!companyRegex.test(lines[0])) fields.name = lines[0]
+    else if (lines[1]) fields.name = lines[1]
   }
 
-  // Title extraction (look for common title keywords)
-  const titleRegex = /(대표|사장|부사장|전무|상무|이사|부장|차장|과장|대리|주임|팀장|실장|원장|교수|선생님|님|씨)/gi
+  // Title
+  const titleRegex = /(대표|사장|부사장|전무|상무|이사|부장|차장|과장|대리|주임|팀장|실장|원장|교수|선생님|님|씨)/i
   for (const line of lines) {
-    if (titleRegex.test(line) && !fields.title) {
-      fields.title = line.trim()
+    if (titleRegex.test(line)) {
+      fields.title = line
       break
     }
   }
 
-  // Department extraction
-  const deptRegex = /(부|팀|실|센터|연구소|사업부|영업부|마케팅|개발|기획|인사|총무|재무|회계)/gi
+  // Department
+  const deptRegex = /(부|팀|실|센터|연구소|사업부|영업부|마케팅|개발|기획|인사|총무|재무|회계)/i
   for (const line of lines) {
-    if (deptRegex.test(line) && !fields.department) {
-      fields.department = line.trim()
+    if (deptRegex.test(line)) {
+      fields.department = line
       break
     }
   }
@@ -164,22 +127,20 @@ function extractFieldsFromText(text: string) {
 }
 
 function normalizePhone(phone: string): string {
-  // Remove all non-digit characters except +
+  // remove non-digits except +
   let cleaned = phone.replace(/[^\d+]/g, '')
-  
-  // Handle Korean phone numbers
-  if (cleaned.startsWith('+82')) {
-    cleaned = '0' + cleaned.slice(3)
-  }
-  
-  // Format as 010-1234-5678
+
+  // +82 → 0
+  if (cleaned.startsWith('+82')) cleaned = '0' + cleaned.slice(3)
+
+  // 010-1234-5678
   if (cleaned.length === 11 && cleaned.startsWith('010')) {
     return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 7)}-${cleaned.slice(7)}`
   }
-  
+
   if (cleaned.length === 10) {
     return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6)}`
   }
-  
-  return phone // Return original if can't normalize
+
+  return phone
 }
