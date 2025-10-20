@@ -24,3 +24,17 @@ WHERE id = 'business-cards';
 SELECT policyname, permissive, roles, cmd, qual
 FROM pg_policies
 WHERE tablename = 'objects' AND schemaname = 'storage';
+
+-- 5. ai_analysis_history 테이블이 존재하는지 확인
+SELECT EXISTS (
+   SELECT FROM information_schema.tables 
+   WHERE table_schema = 'public' 
+   AND table_name = 'ai_analysis_history'
+) as ai_analysis_history_table_exists;
+
+-- 6. ai_analysis_history 테이블의 컬럼 구조 확인 (테이블이 존재하는 경우에만)
+SELECT column_name, data_type, is_nullable, column_default
+FROM information_schema.columns
+WHERE table_schema = 'public' 
+AND table_name = 'ai_analysis_history'
+ORDER BY ordinal_position;

@@ -24,7 +24,7 @@ import { Alert, AlertDescription } from "../components/ui/alert";
 import { toast } from "sonner";
 import { MOCK_CARDS, getVerticalLabel } from "../constants/data";
 import { getPriorityColor } from "../utils/helpers";
-import { matchesChosung } from "../utils/korean";
+import { matchesChosung, getSearchScore } from "../utils/korean";
 
 interface AIInsightsPageProps {
   onNavigate?: (page: string) => void;
@@ -32,6 +32,7 @@ interface AIInsightsPageProps {
 
 export default function AIInsights({ onNavigate }: AIInsightsPageProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [hasResult, setHasResult] = useState(false);
@@ -116,10 +117,17 @@ export default function AIInsights({ onNavigate }: AIInsightsPageProps) {
   console.log('Companies derived:', companies);
   console.log('Loading state:', loading);
 
-  // 검색 필터링된 회사 목록
-  const filteredCompanies = companies.filter(company =>
-    matchesChosung(company.label, searchQuery)
-  );
+  // 검색 필터링된 회사 목록 (정확도 순으로 정렬)
+  const filteredCompanies = companies
+    .filter(company => matchesChosung(company.label, searchQuery))
+    .map(company => ({
+      ...company,
+      searchScore: getSearchScore(company.label, searchQuery)
+    }))
+    .sort((a, b) => b.searchScore - a.searchScore);
+
+  // 자동완성 제안 (상위 5개)
+  const suggestions = filteredCompanies.slice(0, 5);
 
   // Mock AI 분석 결과
   const [analysisResult, setAnalysisResult] = useState({
@@ -186,14 +194,50 @@ export default function AIInsights({ onNavigate }: AIInsightsPageProps) {
       if (result.ok && result.analysis) {
         setAnalysisResult(result.analysis);
         setHasResult(true);
-        toast.success("AI 분석이 완료되었습니다");
+        
+        // AI 분석 결과를 히스토리에 저장
+        try {
+          const saveResponse = await fetch('/api/ai-analysis/save', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+              companyName: company, 
+              analysis: result.analysis 
+            })
+          });
+          
+          const saveResult = await saveResponse.json();
+          
+          if (saveResult.ok) {
+            toast.success("AI 분석이 완료되고 히스토리에 저장되었습니다");
+          } else {
+            toast.success("AI 분석이 완료되었습니다 (히스토리 저장 실패)");
+          }
+        } catch (saveError) {
+          console.error('Save analysis error:', saveError);
+          toast.success("AI 분석이 완료되었습니다 (히스토리 저장 실패)");
+        }
       } else {
         console.error('AI Analysis failed:', result.error);
-        toast.error(result.error || "AI 분석에 실패했습니다");
+        if (result.error?.includes('No contacts found')) {
+          toast.error("해당 회사의 연락처 정보가 없습니다");
+        } else {
+          toast.error(result.error || "AI 분석에 실패했습니다");
+        }
       }
     } catch (error: any) {
       console.error('AI Analysis error:', error);
-      toast.error("AI 분석 중 오류가 발생했습니다");
+      
+      // 더 구체적인 에러 메시지 표시
+      if (error.message?.includes('Failed to fetch')) {
+        toast.error("서버 연결에 실패했습니다. 네트워크를 확인해주세요.");
+      } else if (error.message?.includes('API key')) {
+        toast.error("AI 서비스 설정에 문제가 있습니다.");
+      } else {
+        toast.error(`AI 분석 중 오류가 발생했습니다: ${error.message || '알 수 없는 오류'}`);
+      }
     } finally {
       setIsAnalyzing(false);
     }
@@ -249,9 +293,37 @@ export default function AIInsights({ onNavigate }: AIInsightsPageProps) {
       if (result.ok && result.analysis) {
         setAnalysisResult(result.analysis);
         setHasResult(true);
-        toast.success("AI 재분석이 완료되었습니다");
+        
+        // AI 재분석 결과를 히스토리에 저장
+        try {
+          const saveResponse = await fetch('/api/ai-analysis/save', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+              companyName: selectedCompany, 
+              analysis: result.analysis 
+            })
+          });
+          
+          const saveResult = await saveResponse.json();
+          
+          if (saveResult.ok) {
+            toast.success("AI 재분석이 완료되고 히스토리에 저장되었습니다");
+          } else {
+            toast.success("AI 재분석이 완료되었습니다 (히스토리 저장 실패)");
+          }
+        } catch (saveError) {
+          console.error('Save reanalysis error:', saveError);
+          toast.success("AI 재분석이 완료되었습니다 (히스토리 저장 실패)");
+        }
       } else {
-        toast.error(result.error || "AI 재분석에 실패했습니다");
+        if (result.error?.includes('No contacts found')) {
+          toast.error("해당 회사의 연락처 정보가 없습니다");
+        } else {
+          toast.error(result.error || "AI 재분석에 실패했습니다");
+        }
       }
     } catch (error: any) {
       console.error('AI Reanalysis error:', error);
@@ -294,13 +366,52 @@ export default function AIInsights({ onNavigate }: AIInsightsPageProps) {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="회사명 검색..."
+              placeholder="회사명 검색... (예: 삼성, 네이버, 카카오)"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onFocus={() => setIsFocused(true)}
-              onBlur={() => setTimeout(() => setIsFocused(false), 200)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setShowSuggestions(e.target.value.length > 0);
+              }}
+              onFocus={() => {
+                setIsFocused(true);
+                setShowSuggestions(searchQuery.length > 0);
+              }}
+              onBlur={() => setTimeout(() => {
+                setIsFocused(false);
+                setShowSuggestions(false);
+              }, 200)}
               className="pl-10"
             />
+            
+            {/* 자동완성 제안 */}
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-background border border-border rounded-md shadow-lg z-10 max-h-60 overflow-y-auto">
+                {suggestions.map((company) => (
+                  <div
+                    key={company.value}
+                    className="p-3 hover:bg-muted/50 cursor-pointer border-b border-border last:border-b-0"
+                    onClick={() => {
+                      setSearchQuery(company.label);
+                      setShowSuggestions(false);
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-foreground">{company.label}</p>
+                        <p className="text-sm text-muted-foreground">
+                          등록된 명함 {company.contacts}명
+                        </p>
+                      </div>
+                      {company.searchScore > 0 && (
+                        <Badge variant="secondary" className="text-xs">
+                          {company.searchScore}%
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Search Results */}
@@ -327,9 +438,19 @@ export default function AIInsights({ onNavigate }: AIInsightsPageProps) {
                         </div>
                         <div>
                           <p className="text-foreground">{company.label}</p>
-                          <p className="text-muted-foreground">
-                            등록된 명함 {company.contacts}명
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-muted-foreground">
+                              등록된 명함 {company.contacts}명
+                            </p>
+                            {searchQuery && company.searchScore > 0 && (
+                              <Badge 
+                                variant="secondary" 
+                                className="text-xs"
+                              >
+                                정확도 {company.searchScore}%
+                              </Badge>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <Button
@@ -344,8 +465,17 @@ export default function AIInsights({ onNavigate }: AIInsightsPageProps) {
                   ))}
                 </div>
               ) : (
-                <div className="p-8 text-center text-muted-foreground">
-                  검색 결과가 없습니다
+                <div className="p-8 text-center text-muted-foreground space-y-2">
+                  <p>검색 결과가 없습니다</p>
+                  <p className="text-sm">
+                    다른 키워드로 검색하거나 초성으로 검색해보세요
+                  </p>
+                  <div className="text-xs space-y-1 mt-3">
+                    <p>💡 검색 팁:</p>
+                    <p>• "삼성" → "삼성전자", "삼성SDS" 등</p>
+                    <p>• "ㅅㅅ" → "삼성"으로 시작하는 회사들</p>
+                    <p>• "네이버" → "NAVER", "네이버(주)" 등</p>
+                  </div>
                 </div>
               )}
             </div>
@@ -383,7 +513,18 @@ export default function AIInsights({ onNavigate }: AIInsightsPageProps) {
       {isAnalyzing && (
         <Card>
           <CardContent className="py-12">
-            <LoadingState message="AI가 회사 정보를 분석하고 있습니다..." />
+            <div className="text-center space-y-4">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+              <div className="space-y-2">
+                <p className="text-foreground font-medium">AI가 회사 정보를 분석하고 있습니다...</p>
+                <p className="text-muted-foreground text-sm">
+                  ChatGPT가 {selectedCompany}의 명함 정보를 바탕으로 비즈니스 기회를 분석 중입니다.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  분석에는 10-30초 정도 소요될 수 있습니다.
+                </p>
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -445,7 +586,8 @@ export default function AIInsights({ onNavigate }: AIInsightsPageProps) {
               <Alert className="mb-4">
                 <AlertCircle className="w-4 h-4" />
                 <AlertDescription>
-                  아래 요약은 AI가 생성한 내용으로, 실제와 다를 수 있습니다.
+                  아래 분석은 ChatGPT가 생성한 내용으로, 실제와 다를 수 있습니다. 
+                  등록된 명함 정보를 바탕으로 AI가 추정한 내용입니다.
                 </AlertDescription>
               </Alert>
               
