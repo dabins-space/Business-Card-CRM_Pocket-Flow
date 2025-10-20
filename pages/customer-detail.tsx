@@ -35,6 +35,9 @@ import {
   CreditCard,
   Save,
   X,
+  Users,
+  User,
+  Briefcase,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getImportanceColor, getPriorityColor } from "../utils/helpers";
@@ -62,6 +65,7 @@ export default function CustomerDetail({ onNavigate, contactId }: CustomerDetail
   const loadContactData = async () => {
     try {
       setLoading(true);
+      setError(null);
       
       if (!contactId) {
         setError('연락처 ID가 없습니다');
@@ -77,7 +81,7 @@ export default function CustomerDetail({ onNavigate, contactId }: CustomerDetail
       
       if (result.ok && result.contact) {
         const contact = result.contact;
-        setCardData({
+        const transformedData = {
           id: contact.id,
           name: contact.name,
           position: contact.title || '',
@@ -90,8 +94,12 @@ export default function CustomerDetail({ onNavigate, contactId }: CustomerDetail
           memo: contact.memo || '',
           image_path: contact.image_path,
           date: new Date(contact.created_at).toLocaleDateString('ko-KR'),
-        });
+        };
+        
+        console.log('Transformed card data:', transformedData);
+        setCardData(transformedData);
       } else {
+        console.error('Failed to load contact:', result.error);
         setError(result.error || '연락처를 불러오는데 실패했습니다');
       }
     } catch (error: any) {
@@ -155,10 +163,34 @@ export default function CustomerDetail({ onNavigate, contactId }: CustomerDetail
     },
   ];
 
-  const handleDelete = () => {
-    toast.success("명함이 삭제되었습니다");
-    if (onNavigate) {
-      onNavigate("/customers");
+  const handleDelete = async () => {
+    if (!contactId) {
+      toast.error("연락처 ID가 없습니다");
+      return;
+    }
+
+    try {
+      console.log('Deleting contact:', contactId);
+      
+      const response = await fetch(`/api/contact/${contactId}/delete`, {
+        method: 'DELETE',
+      });
+
+      const result = await response.json();
+      console.log('Delete response:', result);
+
+      if (result.ok) {
+        toast.success("명함이 삭제되었습니다");
+        if (onNavigate) {
+          onNavigate("/customers");
+        }
+      } else {
+        console.error('Delete failed:', result.error);
+        toast.error(result.error || "삭제에 실패했습니다");
+      }
+    } catch (error: any) {
+      console.error('Delete error:', error);
+      toast.error("삭제 중 오류가 발생했습니다");
     }
   };
 
@@ -249,6 +281,9 @@ export default function CustomerDetail({ onNavigate, contactId }: CustomerDetail
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
             <p className="text-muted-foreground">연락처 정보를 불러오는 중...</p>
+            {contactId && (
+              <p className="text-xs text-muted-foreground mt-2">ID: {contactId}</p>
+            )}
           </div>
         </div>
       </div>
@@ -261,14 +296,29 @@ export default function CustomerDetail({ onNavigate, contactId }: CustomerDetail
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <p className="text-destructive mb-4">{error || '연락처를 찾을 수 없습니다'}</p>
-            <Button onClick={() => onNavigate && onNavigate("/customers")}>
-              고객 목록으로 돌아가기
-            </Button>
+            {contactId && (
+              <p className="text-xs text-muted-foreground mb-4">ID: {contactId}</p>
+            )}
+            <div className="space-y-2">
+              <Button onClick={() => onNavigate && onNavigate("/customers")}>
+                고객 목록으로 돌아가기
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={loadContactData}
+                className="ml-2"
+              >
+                다시 시도
+              </Button>
+            </div>
           </div>
         </div>
       </div>
     );
   }
+
+  // 디버깅을 위한 로그
+  console.log('Rendering customer detail with cardData:', cardData);
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -412,7 +462,11 @@ export default function CustomerDetail({ onNavigate, contactId }: CustomerDetail
             <CardContent>
               {/* 기본정보 탭 */}
               <TabsContent value="info" className="space-y-4 mt-0">
-                {isEditing ? (
+                {!cardData ? (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">데이터를 불러오는 중...</p>
+                  </div>
+                ) : isEditing ? (
                   <div className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
@@ -497,30 +551,82 @@ export default function CustomerDetail({ onNavigate, contactId }: CustomerDetail
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                      <Mail className="w-5 h-5 text-muted-foreground" />
-                      <div>
-                        <p className="text-muted-foreground">이메일</p>
-                        <p className="text-foreground">{cardData.email}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                      <Phone className="w-5 h-5 text-muted-foreground" />
-                      <div>
-                        <p className="text-muted-foreground">전화번호</p>
-                        <p className="text-foreground">{cardData.phone}</p>
-                      </div>
-                    </div>
-
+                    {/* 회사명 - 맨 위에 표시 */}
                     <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
                       <Building2 className="w-5 h-5 text-muted-foreground" />
                       <div>
                         <p className="text-muted-foreground">회사</p>
-                        <p className="text-foreground">{cardData.company}</p>
+                        <p className="text-foreground">{cardData.company || '정보 없음'}</p>
                       </div>
                     </div>
 
+                    {/* 이름 */}
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                      <User className="w-5 h-5 text-muted-foreground" />
+                      <div>
+                        <p className="text-muted-foreground">이름</p>
+                        <p className="text-foreground">{cardData.name || '정보 없음'}</p>
+                      </div>
+                    </div>
+
+                    {/* 직책 */}
+                    {cardData.position && (
+                      <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                        <Briefcase className="w-5 h-5 text-muted-foreground" />
+                        <div>
+                          <p className="text-muted-foreground">직책</p>
+                          <p className="text-foreground">{cardData.position}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 부서 */}
+                    {cardData.department && (
+                      <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                        <Users className="w-5 h-5 text-muted-foreground" />
+                        <div>
+                          <p className="text-muted-foreground">부서</p>
+                          <p className="text-foreground">{cardData.department}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 이메일 */}
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                      <Mail className="w-5 h-5 text-muted-foreground" />
+                      <div>
+                        <p className="text-muted-foreground">이메일</p>
+                        <p className="text-foreground">{cardData.email || '정보 없음'}</p>
+                      </div>
+                    </div>
+
+                    {/* 전화번호 */}
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                      <Phone className="w-5 h-5 text-muted-foreground" />
+                      <div>
+                        <p className="text-muted-foreground">전화번호</p>
+                        <p className="text-foreground">{cardData.phone || '정보 없음'}</p>
+                      </div>
+                    </div>
+
+                    {/* 중요도 */}
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                      <Target className="w-5 h-5 text-muted-foreground" />
+                      <div>
+                        <p className="text-muted-foreground">중요도</p>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`px-2 py-1 rounded text-sm ${getImportanceColor(
+                              cardData.importance
+                            )}`}
+                          >
+                            {cardData.importance}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 등록일 */}
                     <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
                       <Calendar className="w-5 h-5 text-muted-foreground" />
                       <div>
@@ -528,17 +634,29 @@ export default function CustomerDetail({ onNavigate, contactId }: CustomerDetail
                         <p className="text-foreground">{cardData.date}</p>
                       </div>
                     </div>
+
+                    {/* 메모 */}
+                    {cardData.memo && (
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <p className="text-muted-foreground mb-2">메모</p>
+                        <p className="text-foreground whitespace-pre-wrap">{cardData.memo}</p>
+                      </div>
+                    )}
                   </div>
                 )}
 
                 <div className="pt-4 border-t border-border">
                   <p className="text-muted-foreground mb-2">문의 유형</p>
                   <div className="flex flex-wrap gap-2">
-                    {cardData.inquiryTypes.map((type: string, index: number) => (
-                      <Badge key={index} variant="secondary">
-                        {type}
-                      </Badge>
-                    ))}
+                    {cardData.inquiryTypes && cardData.inquiryTypes.length > 0 ? (
+                      cardData.inquiryTypes.map((type: string, index: number) => (
+                        <Badge key={index} variant="secondary">
+                          {type}
+                        </Badge>
+                      ))
+                    ) : (
+                      <p className="text-muted-foreground text-sm">문의 유형이 없습니다</p>
+                    )}
                   </div>
                 </div>
 

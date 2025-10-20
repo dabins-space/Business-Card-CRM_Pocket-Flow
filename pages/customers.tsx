@@ -13,12 +13,23 @@ import {
 } from "../components/ui/select";
 import { EmptyState } from "../components/EmptyState";
 import { LoadingState } from "../components/LoadingState";
-import { Search, Filter, Camera, CreditCard, Building2, Mail, Phone, Users } from "lucide-react";
+import { Search, Filter, Camera, CreditCard, Building2, Mail, Phone, Users, Trash2 } from "lucide-react";
 import { Badge } from "../components/ui/badge";
 import { getVerticalLabel, VERTICAL_OPTIONS } from "../constants/data";
 import { getImportanceColor } from "../utils/helpers";
 import { cardsApi } from "../utils/api";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "../components/ui/alert-dialog";
 
 interface CustomersPageProps {
   onNavigate?: (page: string) => void;
@@ -86,6 +97,31 @@ export default function Customers({ onNavigate }: CustomersPageProps) {
       importanceFilter === "all" || card.importance?.toString() === importanceFilter;
     return matchesSearch && matchesImportance;
   });
+
+  const handleDeleteCard = async (cardId: string, cardName: string) => {
+    try {
+      console.log('Deleting card:', cardId);
+      
+      const response = await fetch(`/api/contact/${cardId}/delete`, {
+        method: 'DELETE',
+      });
+
+      const result = await response.json();
+      console.log('Delete response:', result);
+
+      if (result.ok) {
+        // 삭제 성공 시 목록에서 해당 카드 제거
+        setCards(prevCards => prevCards.filter(card => card.id !== cardId));
+        toast.success(`${cardName}의 명함이 삭제되었습니다`);
+      } else {
+        console.error('Delete failed:', result.error);
+        toast.error(result.error || "삭제에 실패했습니다");
+      }
+    } catch (error: any) {
+      console.error('Delete error:', error);
+      toast.error("삭제 중 오류가 발생했습니다");
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -159,24 +195,28 @@ export default function Customers({ onNavigate }: CustomersPageProps) {
           {filteredCards.map((card) => (
             <Card
               key={card.id}
-              className="overflow-hidden hover:border-primary/50 transition-colors cursor-pointer"
-              onClick={() => onNavigate && onNavigate(`/customer-detail?id=${card.id}`)}
+              className="overflow-hidden hover:border-primary/50 transition-colors"
             >
               <div className="aspect-[16/10] bg-muted relative overflow-hidden">
-                {card.image_path ? (
-                  <img
-                    src={`https://qmyyyxkpemdjuwtimwsv.supabase.co/storage/v1/object/public/business-cards/${card.image_path}`}
-                    alt={card.name}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      // 이미지 로드 실패 시 기본 이미지 표시
-                      e.currentTarget.style.display = 'none';
-                      e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                    }}
-                  />
-                ) : null}
-                <div className={`w-full h-full flex items-center justify-center bg-muted ${card.image_path ? 'hidden' : ''}`}>
-                  <CreditCard className="w-12 h-12 text-muted-foreground" />
+                <div 
+                  className="w-full h-full cursor-pointer"
+                  onClick={() => onNavigate && onNavigate(`/customer-detail?id=${card.id}`)}
+                >
+                  {card.image_path ? (
+                    <img
+                      src={`https://qmyyyxkpemdjuwtimwsv.supabase.co/storage/v1/object/public/business-cards/${card.image_path}`}
+                      alt={card.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        // 이미지 로드 실패 시 기본 이미지 표시
+                        e.currentTarget.style.display = 'none';
+                        e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                      }}
+                    />
+                  ) : null}
+                  <div className={`w-full h-full flex items-center justify-center bg-muted ${card.image_path ? 'hidden' : ''}`}>
+                    <CreditCard className="w-12 h-12 text-muted-foreground" />
+                  </div>
                 </div>
                 <div className="absolute top-2 right-2">
                   <span
@@ -186,6 +226,37 @@ export default function Customers({ onNavigate }: CustomersPageProps) {
                   >
                     {card.importance}
                   </span>
+                </div>
+                <div className="absolute top-2 left-2">
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="h-8 w-8 p-0"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>명함을 삭제하시겠습니까?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          {card.name}의 명함을 삭제합니다. 이 작업은 취소할 수 없습니다.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>취소</AlertDialogCancel>
+                        <AlertDialogAction 
+                          onClick={() => handleDeleteCard(card.id, card.name)}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          삭제
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               </div>
               <CardContent className="pt-4 space-y-3">
