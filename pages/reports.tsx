@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import {
@@ -19,6 +19,7 @@ import {
   Calendar,
   Target,
   Activity,
+  Loader2,
 } from "lucide-react";
 import { Badge } from "../components/ui/badge";
 
@@ -26,41 +27,109 @@ interface ReportsPageProps {
   onNavigate?: (page: string) => void;
 }
 
+interface ReportData {
+  kpi: {
+    totalCards: number
+    thisMonth: number
+    totalCompanies: number
+    aiInsights: number
+    avgImportance: number
+    trend: string
+  }
+  industryData: Array<{
+    name: string
+    count: number
+    percentage: number
+  }>
+  topCompanies: Array<{
+    name: string
+    contacts: number
+    importance: number
+    lastContact: string
+  }>
+  activityData: Array<{
+    week: string
+    cards: number
+    insights: number
+  }>
+}
+
 export default function Reports({ onNavigate }: ReportsPageProps) {
   const [period, setPeriod] = useState("month");
+  const [reportData, setReportData] = useState<ReportData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Mock 통계 데이터
-  const kpiData = {
-    totalCards: 48,
-    thisMonth: 12,
-    totalCompanies: 32,
-    aiInsights: 24,
-    avgImportance: 3.8,
-    trend: "+15%",
+  // 실제 데이터 가져오기
+  const fetchReportData = async (selectedPeriod: string) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await fetch(`/api/reports?period=${selectedPeriod}`);
+      const result = await response.json();
+      
+      if (result.ok && result.data) {
+        setReportData(result.data);
+      } else {
+        setError(result.error || 'Failed to fetch report data');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const industryData = [
-    { name: "소프트웨어 개발", count: 15, percentage: 31 },
-    { name: "제조업", count: 10, percentage: 21 },
-    { name: "금융", count: 8, percentage: 17 },
-    { name: "유통/물류", count: 7, percentage: 15 },
-    { name: "기타", count: 8, percentage: 16 },
-  ];
+  useEffect(() => {
+    fetchReportData(period);
+  }, [period]);
 
-  const topCompanies = [
-    { name: "테크코퍼레이션", contacts: 5, importance: 5, lastContact: "2025-10-17" },
-    { name: "디자인스튜디오", contacts: 4, importance: 4, lastContact: "2025-10-16" },
-    { name: "솔루션즈", contacts: 3, importance: 4, lastContact: "2025-10-15" },
-    { name: "이노베이션랩", contacts: 3, importance: 3, lastContact: "2025-10-12" },
-    { name: "글로벌파트너스", contacts: 2, importance: 5, lastContact: "2025-10-10" },
-  ];
+  // 로딩 상태 처리
+  if (loading) {
+    return (
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="flex items-center gap-3">
+            <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            <span className="text-muted-foreground">리포트 데이터를 불러오는 중...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-  const activityData = [
-    { week: "1주차", cards: 8, insights: 5 },
-    { week: "2주차", cards: 12, insights: 7 },
-    { week: "3주차", cards: 10, insights: 6 },
-    { week: "4주차", cards: 15, insights: 9 },
-  ];
+  // 에러 상태 처리
+  if (error) {
+    return (
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <p className="text-destructive mb-4">리포트 데이터를 불러올 수 없습니다</p>
+            <p className="text-muted-foreground mb-4">{error}</p>
+            <Button onClick={() => fetchReportData(period)}>
+              다시 시도
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 데이터가 없는 경우
+  if (!reportData) {
+    return (
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <p className="text-muted-foreground">리포트 데이터가 없습니다</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const { kpi: kpiData, industryData, topCompanies, activityData } = reportData;
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -283,7 +352,9 @@ export default function Reports({ onNavigate }: ReportsPageProps) {
             </div>
             <div className="p-4 rounded-lg bg-muted/50 text-center">
               <p className="text-muted-foreground mb-2">가장 활발한 산업</p>
-              <h4 className="text-foreground">소프트웨어</h4>
+              <h4 className="text-foreground">
+                {industryData.length > 0 ? industryData[0].name : '데이터 없음'}
+              </h4>
             </div>
             <div className="p-4 rounded-lg bg-muted/50 text-center">
               <p className="text-muted-foreground mb-2">성장률</p>
