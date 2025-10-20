@@ -113,7 +113,65 @@ export default function CardsUpload({ onNavigate }: UploadPageProps) {
     
     console.log('=== handleOcrRetry called ===');
     setOcrLoading(true);
-    await handleUpload(file);
+    
+    try {
+      // Convert file to base64 for OCR
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64String = reader.result as string;
+        console.log('Base64 string length:', base64String.length);
+        
+        try {
+          console.log('Calling OCR API for retry...');
+          const response = await fetch('/api/ocr', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ imageBase64: base64String }),
+          });
+          
+          console.log('OCR Retry Response status:', response.status);
+          const result = await response.json();
+          console.log('OCR Retry Response:', result);
+          
+          if (result.ok && result.fields) {
+            console.log('OCR retry successful, updating form data');
+            setFormData({
+              ...formData,
+              name: result.fields.name || "",
+              position: result.fields.title || "",
+              department: result.fields.department || "",
+              company: result.fields.company || "",
+              email: result.fields.email || "",
+              phone: result.fields.phone || "",
+            });
+            toast.success("OCR 재분석이 완료되었습니다");
+          } else {
+            console.error('OCR Retry Error:', result);
+            toast.error(result.error || "OCR 재분석에 실패했습니다");
+          }
+        } catch (error) {
+          console.error('OCR Retry API Error:', error);
+          toast.error(`OCR 재분석 중 오류가 발생했습니다: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } finally {
+          setOcrLoading(false);
+        }
+      };
+      
+      reader.onerror = () => {
+        console.error('FileReader error during retry');
+        toast.error("파일 읽기 중 오류가 발생했습니다");
+        setOcrLoading(false);
+      };
+      
+      console.log('Reading file as data URL for retry...');
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('OCR retry error:', error);
+      toast.error("OCR 재분석 중 오류가 발생했습니다");
+      setOcrLoading(false);
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
