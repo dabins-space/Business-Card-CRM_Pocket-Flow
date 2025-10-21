@@ -80,24 +80,31 @@ export async function analyzeCompanyWithAI(request: AIAnalysisRequest): Promise<
       throw new Error('OpenAI API key is not configured');
     }
     
-    // 웹 검색으로 회사 정보 수집
-    const webInfo = await searchCompanyInfo(request.companyName);
+    // 웹 검색과 뉴스 검색을 병렬로 실행하여 성능 향상
+    console.log('Starting parallel web and news search...');
+    const [webInfo, recentNews] = await Promise.allSettled([
+      searchCompanyInfo(request.companyName),
+      searchCompanyNews(request.companyName)
+    ]);
+    
+    // 웹 검색 결과 처리
+    const finalWebInfo = webInfo.status === 'fulfilled' ? webInfo.value : {
+      website: '',
+      searchResults: []
+    };
     console.log('Web search completed:', {
-      website: webInfo.website,
-      resultsCount: webInfo.searchResults.length
+      website: finalWebInfo.website,
+      resultsCount: finalWebInfo.searchResults.length
     });
     
-    // 뉴스 검색으로 최근 뉴스 수집
-    const recentNews = await searchCompanyNews(request.companyName).catch((error) => {
-      console.error('News search failed:', error);
-      return [];
-    });
+    // 뉴스 검색 결과 처리
+    const finalRecentNews = recentNews.status === 'fulfilled' ? recentNews.value : [];
     console.log('News search completed:', {
-      newsCount: recentNews.length
+      newsCount: finalRecentNews.length
     });
     
     // 프롬프트 생성 (웹 정보 및 뉴스 포함)
-    const prompt = generateAnalysisPrompt(request, webInfo, recentNews);
+    const prompt = generateAnalysisPrompt(request, finalWebInfo, finalRecentNews);
     
     console.log('Generated prompt length:', prompt.length);
     
@@ -140,11 +147,11 @@ export async function analyzeCompanyWithAI(request: AIAnalysisRequest): Promise<
       console.error('Raw response:', response);
       
       // 파싱 실패 시 기본값 반환 (뉴스 데이터 포함)
-      analysisResult = generateFallbackAnalysis(request.companyName, request.contacts, recentNews);
+      analysisResult = generateFallbackAnalysis(request.companyName, request.contacts, finalRecentNews);
     }
 
     // 결과 검증 및 보완 (실제 뉴스 데이터 포함)
-    return validateAndEnhanceAnalysis(analysisResult, request, recentNews);
+    return validateAndEnhanceAnalysis(analysisResult, request, finalRecentNews);
     
   } catch (error) {
     console.error('AI 분석 중 오류 발생:', error);

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -186,14 +186,16 @@ export default function AIInsights({ onNavigate, companyName, analysisData, from
 
 
 
-  // 회사 목록 (중복 제거) - 실제 데이터 사용
-  const companies = Array.from(new Set(contacts.map(contact => contact.company).filter(Boolean))).map(company => {
-    return {
-      value: company,
-      label: company,
-      contacts: contacts.filter(c => c.company === company).length,
-    };
-  });
+  // 회사 목록 (중복 제거) - 실제 데이터 사용 - 메모이제이션으로 성능 최적화
+  const companies = useMemo(() => {
+    return Array.from(new Set(contacts.map(contact => contact.company).filter(Boolean))).map(company => {
+      return {
+        value: company,
+        label: company,
+        contacts: contacts.filter(c => c.company === company).length,
+      };
+    });
+  }, [contacts]);
 
   // 디버깅을 위한 로그
   console.log('=== AI Insights Debug Info ===');
@@ -201,17 +203,21 @@ export default function AIInsights({ onNavigate, companyName, analysisData, from
   console.log('Companies derived:', companies);
   console.log('Loading state:', loading);
 
-  // 검색 필터링된 회사 목록 (정확도 순으로 정렬)
-  const filteredCompanies = companies
-    .filter(company => matchesChosung(company.label, searchQuery))
-    .map(company => ({
-      ...company,
-      searchScore: getSearchScore(company.label, searchQuery)
-    }))
-    .sort((a, b) => b.searchScore - a.searchScore);
+  // 검색 필터링된 회사 목록 (정확도 순으로 정렬) - 메모이제이션으로 성능 최적화
+  const filteredCompanies = useMemo(() => {
+    return companies
+      .filter(company => matchesChosung(company.label, searchQuery))
+      .map(company => ({
+        ...company,
+        searchScore: getSearchScore(company.label, searchQuery)
+      }))
+      .sort((a, b) => b.searchScore - a.searchScore);
+  }, [companies, searchQuery]);
 
-  // 자동완성 제안 (상위 5개)
-  const suggestions = filteredCompanies.slice(0, 5);
+  // 자동완성 제안 (상위 5개) - 메모이제이션으로 성능 최적화
+  const suggestions = useMemo(() => {
+    return filteredCompanies.slice(0, 5);
+  }, [filteredCompanies]);
 
 
   // Mock AI 분석 결과
@@ -411,8 +417,8 @@ export default function AIInsights({ onNavigate, companyName, analysisData, from
           toast.error("분석 데이터를 불러오는데 실패했습니다");
         }
       } else {
-        // 일반적인 경우 새로 분석 실행
-        const companyExists = companies.some(c => c.value === decodedCompanyName);
+        // 일반적인 경우 새로 분석 실행 - contacts에서 직접 확인
+        const companyExists = contacts.some(c => c.company === decodedCompanyName);
         if (companyExists) {
           handleAnalyze(decodedCompanyName);
         } else {
@@ -420,7 +426,7 @@ export default function AIInsights({ onNavigate, companyName, analysisData, from
         }
       }
     }
-  }, [companyName, contacts, companies, analysisData, fromHistory, fromCustomer]);
+  }, [companyName, contacts, analysisData, fromHistory, fromCustomer]);
 
   const handleEdit = () => {
     setEditableData({
