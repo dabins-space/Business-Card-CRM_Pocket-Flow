@@ -68,15 +68,15 @@ export const authApi = {
 // Business Cards APIs
 export const cardsApi = {
   list: async (accessToken: string) => {
-    return apiCall('/cards', { accessToken });
+    return apiCall('/api/contacts', { accessToken });
   },
 
   get: async (id: string, accessToken: string) => {
-    return apiCall(`/cards/${id}`, { accessToken });
+    return apiCall(`/api/contact/${id}`, { accessToken });
   },
 
   create: async (cardData: any, accessToken: string) => {
-    return apiCall('/cards', {
+    return apiCall('/api/save-contact', {
       method: 'POST',
       body: cardData,
       accessToken,
@@ -84,7 +84,7 @@ export const cardsApi = {
   },
 
   update: async (id: string, cardData: any, accessToken: string) => {
-    return apiCall(`/cards/${id}`, {
+    return apiCall(`/api/contact/${id}`, {
       method: 'PUT',
       body: cardData,
       accessToken,
@@ -92,7 +92,7 @@ export const cardsApi = {
   },
 
   delete: async (id: string, accessToken: string) => {
-    return apiCall(`/cards/${id}`, {
+    return apiCall(`/api/contact/${id}`, {
       method: 'DELETE',
       accessToken,
     });

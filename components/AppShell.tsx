@@ -1,5 +1,7 @@
 import React, { useState } from "react";
-import { Camera, Sparkles, Users, BarChart3, Settings } from "lucide-react";
+import { Camera, Sparkles, Users, BarChart3, Settings, LogOut } from "lucide-react";
+import { useAuth } from "../contexts/AuthContext";
+import { Button } from "./ui/button";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -10,6 +12,7 @@ interface AppShellProps {
 
 export function AppShell({ children, title, currentPage = "/", onNavigate }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { user, signout } = useAuth();
 
   const navigation = [
     { name: "홈", href: "/", icon: Camera, label: "명함 등록" },
@@ -66,6 +69,28 @@ export function AppShell({ children, title, currentPage = "/", onNavigate }: App
               );
             })}
           </nav>
+          
+          {/* User info and logout */}
+          <div className="px-3 py-4 border-t border-border">
+            <div className="flex items-center gap-3 px-3 py-2">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground truncate">
+                  {user?.name || user?.email}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {user?.role === 'admin' ? '관리자' : '사용자'}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={signout}
+                className="h-8 w-8 p-0"
+              >
+                <LogOut className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
         </div>
       </aside>
 

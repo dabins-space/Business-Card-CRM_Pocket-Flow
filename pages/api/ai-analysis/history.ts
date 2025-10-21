@@ -29,10 +29,35 @@ export default async function handler(
   try {
     console.log('Fetching AI analysis history...');
 
-    // AI 분석 히스토리를 최신순으로 조회
+    // Authorization 헤더에서 사용자 ID 추출
+    const authHeader = req.headers.authorization;
+    let userId = null;
+    
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      try {
+        const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+        if (user && !error) {
+          userId = user.id;
+        }
+      } catch (error) {
+        console.log('토큰 검증 실패:', error);
+      }
+    }
+
+    // 사용자 ID가 없으면 빈 배열 반환
+    if (!userId) {
+      return res.status(200).json({
+        ok: true,
+        history: []
+      });
+    }
+
+    // 해당 사용자의 AI 분석 히스토리만 조회
     const { data: history, error } = await supabaseAdmin
       .from('ai_analysis_history')
       .select('*')
+      .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
     if (error) {

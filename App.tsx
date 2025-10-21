@@ -1,6 +1,9 @@
 import React, { useState } from "react";
 import dynamic from "next/dynamic";
 import { AppShell } from "./components/AppShell";
+import { useAuth, AuthProvider } from "./contexts/AuthContext";
+import AuthPage from "./pages/auth";
+import { LoadingState } from "./components/LoadingState";
 
 const Toaster = dynamic(() => import("./components/ui/sonner").then(mod => ({ default: mod.Toaster })), {
   ssr: false,
@@ -18,6 +21,7 @@ import SettingsPage from "./pages/settings";
 import AdminWhitelistPage from "./pages/admin-whitelist";
 
 function AppContent() {
+  const { user, loading } = useAuth();
   const [currentPage, setCurrentPage] = useState("/");
   const [pageParams, setPageParams] = useState<Record<string, string>>({});
 
@@ -36,6 +40,16 @@ function AppContent() {
     setCurrentPage(path);
     setPageParams(params);
   };
+
+  // 로딩 중이면 로딩 화면 표시
+  if (loading) {
+    return <LoadingState />;
+  }
+
+  // 로그인되지 않은 경우 로그인 페이지 표시
+  if (!user) {
+    return <AuthPage onNavigate={handleNavigation} />;
+  }
 
   const renderPage = () => {
     switch (currentPage) {
@@ -77,9 +91,11 @@ function AppContent() {
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-background text-foreground dark">
-      <AppContent />
-      <Toaster />
-    </div>
+    <AuthProvider>
+      <div className="min-h-screen bg-background text-foreground dark">
+        <AppContent />
+        <Toaster />
+      </div>
+    </AuthProvider>
   );
 }

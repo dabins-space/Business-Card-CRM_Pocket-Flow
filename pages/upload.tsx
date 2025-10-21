@@ -13,12 +13,14 @@ import { INQUIRY_TYPE_OPTIONS } from "../constants/data";
 import { Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { uploadCardImage } from "../lib/upload-card-image";
+import { useAuth } from "../contexts/AuthContext";
 
 interface UploadPageProps {
   onNavigate?: (page: string) => void;
 }
 
 export default function CardsUpload({ onNavigate }: UploadPageProps) {
+  const { user } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [ocrLoading, setOcrLoading] = useState(false);
@@ -44,7 +46,7 @@ export default function CardsUpload({ onNavigate }: UploadPageProps) {
     try {
       // Upload image to Supabase Storage first
       console.log('Uploading image to Supabase Storage...');
-      const userId = 'current-user'; // TODO: Get actual user ID from auth context
+      const userId = user?.id || 'current-user';
       const uploadResult = await uploadCardImage(uploadedFile, userId);
       console.log('Upload result:', uploadResult);
       setImageUrl(uploadResult.publicUrl);

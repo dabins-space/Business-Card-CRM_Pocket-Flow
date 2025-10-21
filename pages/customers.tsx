@@ -19,6 +19,7 @@ import { getVerticalLabel, VERTICAL_OPTIONS } from "../constants/data";
 import { getImportanceColor } from "../utils/helpers";
 import { cardsApi } from "../utils/api";
 import { toast } from "sonner";
+import { useAuth } from "../contexts/AuthContext";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,6 +37,7 @@ interface CustomersPageProps {
 }
 
 export default function Customers({ onNavigate }: CustomersPageProps) {
+  const { accessToken } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [importanceFilter, setImportanceFilter] = useState("all");
   // const [verticalFilter, setVerticalFilter] = useState("all");
@@ -51,7 +53,11 @@ export default function Customers({ onNavigate }: CustomersPageProps) {
       setLoading(true);
       console.log('Loading contacts from API...');
       
-      const response = await fetch('/api/contacts');
+      const response = await fetch('/api/contacts', {
+        headers: {
+          ...(accessToken && { "Authorization": `Bearer ${accessToken}` }),
+        },
+      });
       const result = await response.json();
       
       console.log('Contacts API response:', result);

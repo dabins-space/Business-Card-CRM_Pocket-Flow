@@ -24,32 +24,61 @@ interface ContactsResponse {
   error?: string
 }
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse<ContactsResponse>
-) {
-  console.log('=== Contacts API Handler Started ===')
-  console.log('Method:', req.method)
-  
+// 인증 토큰에서 사용자 정보 추출
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ ok: false, error: 'Method not allowed' })
   }
 
   try {
-    console.log('Fetching contacts from Supabase...')
+    // Authorization 헤더에서 토큰 추출
+    const authHeader = req.headers.authorization;
+    let userId = null;
     
+    console.log('=== Contacts API Debug ===');
+    console.log('Authorization header:', authHeader);
+    
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      console.log('Token extracted:', token.substring(0, 20) + '...');
+      try {
+        // Supabase에서 토큰 검증
+        const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+        if (user && !error) {
+          userId = user.id;
+          console.log('User ID extracted:', userId);
+        } else {
+          console.log('User extraction failed:', error);
+        }
+      } catch (error) {
+        console.log('토큰 검증 실패:', error);
+      }
+    } else {
+      console.log('No valid authorization header found');
+    }
+    
+    console.log('Final user ID for contacts:', userId);
+
+    // 사용자 ID가 없으면 빈 배열 반환
+    if (!userId) {
+      return res.status(200).json({
+        ok: true,
+        contacts: []
+      });
+    }
+
+    // 해당 사용자의 연락처만 조회
     const { data: contacts, error } = await supabaseAdmin
       .from('contacts')
       .select('*')
-      .order('created_at', { ascending: false })
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
 
     if (error) {
       console.error('Supabase error:', error)
-      return res.status(500).json({ ok: false, error: `Failed to fetch contacts: ${error instanceof Error ? error.message : 'Unknown error'}` })
+      return res.status(500).json({ ok: false, error: `Failed to fetch contacts: ${error.message}` })
     }
 
-    console.log('Contacts fetched successfully:', contacts?.length || 0)
-    
     res.status(200).json({
       ok: true,
       contacts: contacts || []

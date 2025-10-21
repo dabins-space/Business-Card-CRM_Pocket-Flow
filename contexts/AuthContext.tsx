@@ -1,22 +1,19 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { createClient } from '../utils/supabase/client';
-import { authApi } from '../utils/api';
 
 interface User {
   id: string;
   email: string;
   name: string;
-  role: string;
+  role: 'admin' | 'user';
 }
 
 interface AuthContextType {
   user: User | null;
-  accessToken: string | null;
   loading: boolean;
   signin: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, name: string) => Promise<void>;
   signout: () => Promise<void>;
-  isAdmin: boolean;
+  accessToken: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -24,48 +21,88 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // 로그인 성공했던 시점처럼 false
   const supabase = createClient();
 
   useEffect(() => {
-    // Check for existing session
+    // 기존 세션 확인
+    const checkSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (session?.user) {
+          await loadUserProfile(session.user);
+        }
+      } catch (error) {
+        console.error('Session check error:', error);
+      }
+    };
+
     checkSession();
+
+    // 인증 상태 변경 리스너
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (session?.user) {
+          await loadUserProfile(session.user);
+        } else {
+          setUser(null);
+          setAccessToken(null);
+        }
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
-  const checkSession = async () => {
+  const loadUserProfile = async (supabaseUser: any) => {
     try {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
-      if (session && session.access_token) {
-        const userData = await authApi.getSession(session.access_token);
-        setUser(userData.user);
-        setAccessToken(session.access_token);
+      const { data: profile, error } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', supabaseUser.id)
+        .single();
+
+      if (error || !profile) {
+        console.error('Error loading user profile:', error);
+        return;
       }
+
+      const profileData = profile as any;
+      
+      setUser({
+        id: profileData.id,
+        email: profileData.email,
+        name: profileData.name,
+        role: profileData.role,
+      });
+      
+      // 세션에서 access_token 가져오기
+      const { data: { session } } = await supabase.auth.getSession();
+      setAccessToken(session?.access_token || null);
     } catch (error) {
-      console.error('Session check error:', error);
-    } finally {
-      setLoading(false);
+      console.error('Error loading user profile:', error);
     }
   };
 
   const signin = async (email: string, password: string) => {
     try {
-      const response = await authApi.signin(email, password);
-      setUser(response.user);
-      setAccessToken(response.accessToken);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (data.user) {
+        await loadUserProfile(data.user);
+      }
     } catch (error) {
       console.error('Sign in error:', error);
-      throw error;
-    }
-  };
-
-  const signup = async (email: string, password: string, name: string) => {
-    try {
-      const response = await authApi.signup(email, password, name);
-      // After signup, user needs to sign in
-      await signin(email, password);
-    } catch (error) {
-      console.error('Sign up error:', error);
       throw error;
     }
   };
@@ -77,24 +114,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAccessToken(null);
     } catch (error) {
       console.error('Sign out error:', error);
-      throw error;
     }
   };
 
-  const isAdmin = user?.role === 'admin';
-
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        accessToken,
-        loading,
-        signin,
-        signup,
-        signout,
-        isAdmin,
-      }}
-    >
+    <AuthContext.Provider value={{ user, loading, signin, signout, accessToken }}>
       {children}
     </AuthContext.Provider>
   );

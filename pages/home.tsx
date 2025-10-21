@@ -13,12 +13,14 @@ import { Camera, Loader2, Sparkles, CheckCircle2, RotateCcw } from "lucide-react
 import { toast } from "sonner";
 import { cardsApi } from "../utils/api";
 import { uploadCardImage } from "../lib/upload-card-image";
+import { useAuth } from "../contexts/AuthContext";
 
 interface HomePageProps {
   onNavigate?: (page: string) => void;
 }
 
 export default function Home({ onNavigate }: HomePageProps) {
+  const { accessToken } = useAuth();
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [capturedFile, setCapturedFile] = useState<File | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -156,6 +158,7 @@ export default function Home({ onNavigate }: HomePageProps) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...(accessToken && { "Authorization": `Bearer ${accessToken}` }),
         },
         body: JSON.stringify({
           imageUrl,
