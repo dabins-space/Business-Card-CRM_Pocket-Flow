@@ -21,7 +21,11 @@ const nextConfig = {
   // 동적 라우팅 비활성화 (SSR 오류 방지)
   generateBuildId: async () => {
     return 'build-' + Date.now()
-  }
+  },
+  // 정적 생성 비활성화 (SSR 오류 방지)
+  output: 'standalone',
+  // 페이지별 정적 생성 비활성화
+  generateStaticParams: false,
 }
 
 module.exports = nextConfig
