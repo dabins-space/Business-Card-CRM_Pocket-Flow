@@ -119,9 +119,9 @@ export async function searchCompanyNews(companyName: string): Promise<Array<{
   }
 
   try {
-    // Google 뉴스 탭에서 최신 뉴스 검색을 위한 쿼리 개선
+    // Google 뉴스 탭에서 최신 뉴스 검색을 위한 쿼리 개선 (비용 절약을 위해 10개로 제한)
     const newsQuery = `"${companyName}" 뉴스`;
-    const newsUrl = `https://serpapi.com/search?api_key=${apiKey}&q=${encodeURIComponent(newsQuery)}&tbm=nws&num=20&gl=kr&hl=ko&sort=date&tbs=qdr:d`;
+    const newsUrl = `https://serpapi.com/search?api_key=${apiKey}&q=${encodeURIComponent(newsQuery)}&tbm=nws&num=10&gl=kr&hl=ko&sort=date&tbs=qdr:d`;
     
     console.log('Searching for company news:', companyName);
     console.log('News query:', newsQuery);
@@ -148,23 +148,89 @@ export async function searchCompanyNews(companyName: string): Promise<Array<{
       return await searchNewsAlternative(companyName);
     }
 
-    // 뉴스 결과 필터링 (회사명 포함)
-    const companyFilteredNews = data.news_results.filter((news: any) => {
+    // 뉴스 관련도 점수 계산 및 필터링
+    const scoredNews = data.news_results.map((news: any) => {
       const title = (news.title || '').toLowerCase();
       const description = (news.snippet || '').toLowerCase();
       const companyNameLower = companyName.toLowerCase();
       
-      const titleMatch = title.includes(companyNameLower);
-      const descMatch = description.includes(companyNameLower);
+      // 관련도 점수 계산 (0-100)
+      let relevanceScore = 0;
       
-      console.log(`News filter check: "${news.title}" - title match: ${titleMatch}, desc match: ${descMatch}`);
+      // 제목에 회사명이 포함된 경우 높은 점수
+      if (title.includes(companyNameLower)) {
+        relevanceScore += 50;
+        
+        // 제목의 시작 부분에 회사명이 있으면 추가 점수
+        if (title.startsWith(companyNameLower)) {
+          relevanceScore += 20;
+        }
+      }
       
-      // 제목이나 내용에 회사명이 포함되어 있는지 확인
-      return titleMatch || descMatch;
-    });
+      // 내용에 회사명이 포함된 경우 점수
+      if (description.includes(companyNameLower)) {
+        relevanceScore += 30;
+      }
+      
+      // 고품질 콘텐츠 키워드 (인터뷰, 인사이트 등) - 높은 점수
+      const highQualityKeywords = [
+        '인터뷰', '인사이트', '대표', 'CEO', 'CTO', 'CFO', '창업자', '설립자', 
+        '시장', '전망', '분석', '전문가', '의견', '견해', '진실', '비밀', 
+        '스토리', '이야기', '경험', '조언', '팁', '노하우', '독점', '특종',
+        'Y인사이트', 'Y인터뷰', 'CEO인터뷰', '창업자이야기', '성공스토리',
+        '시장분석', '업계전망', '전문가의견', '리더십', '경영철학'
+      ];
+      const titleHighQuality = highQualityKeywords.filter(keyword => title.includes(keyword));
+      const descHighQuality = highQualityKeywords.filter(keyword => description.includes(keyword));
+      
+      // 고품질 콘텐츠는 높은 점수 부여
+      relevanceScore += titleHighQuality.length * 15;  // 제목에 있으면 높은 점수
+      relevanceScore += descHighQuality.length * 12;   // 내용에 있으면 높은 점수
+      
+      // 최근 소식 키워드 (적당한 점수)
+      const recentNewsKeywords = [
+        '출시', '발표', '투자', '계약', '파트너십', '성장', '매출', '실적', 
+        '신제품', '기술', '혁신', '확장', '인수', '합병', '공개', '오픈',
+        '시작', '준비', '계획', '예정', '예고', '소식', '뉴스', '보도',
+        '업데이트', '업그레이드', '개선', '강화', '확대', '증가'
+      ];
+      const titleRecent = recentNewsKeywords.filter(keyword => title.includes(keyword));
+      const descRecent = recentNewsKeywords.filter(keyword => description.includes(keyword));
+      
+      // 최근 소식은 적당한 점수 부여
+      relevanceScore += titleRecent.length * 8;   // 제목에 있으면 적당한 점수
+      relevanceScore += descRecent.length * 6;    // 내용에 있으면 적당한 점수
+      
+      // 콘텐츠 길이 점수 (긴 기사일수록 더 자세한 내용)
+      const contentLength = (title + description).length;
+      if (contentLength > 200) relevanceScore += 5;      // 200자 이상
+      if (contentLength > 500) relevanceScore += 10;     // 500자 이상
+      if (contentLength > 1000) relevanceScore += 15;    // 1000자 이상
+      
+      
+      // 출처 신뢰도 점수
+      const source = (news.source || '').toLowerCase();
+      if (source.includes('조선') || source.includes('중앙') || source.includes('동아') || 
+          source.includes('한국경제') || source.includes('매일경제') || source.includes('서울경제')) {
+        relevanceScore += 10;
+      }
+      
+      console.log(`News relevance score: "${news.title}" - Score: ${relevanceScore}`);
+      
+      return {
+        ...news,
+        relevanceScore
+      };
+    }).filter((news: any) => news.relevanceScore > 0); // 관련도가 있는 뉴스만 필터링
     
-    // 날짜순으로 정렬 (최신순)
-    const sortedNews = companyFilteredNews.sort((a: any, b: any) => {
+    // 관련도 + 최신순 정렬
+    const sortedNews = scoredNews.sort((a: any, b: any) => {
+      // 1순위: 관련도 점수 (높은 순)
+      if (a.relevanceScore !== b.relevanceScore) {
+        return b.relevanceScore - a.relevanceScore;
+      }
+      
+      // 2순위: 날짜 (최신순)
       const dateA = parseNewsDate(a.date);
       const dateB = parseNewsDate(b.date);
       
@@ -172,11 +238,13 @@ export async function searchCompanyNews(companyName: string): Promise<Array<{
         return dateB.getTime() - dateA.getTime();
       }
       
-      // 날짜가 없는 경우 위치 기반으로 정렬 (앞에 나온 것이 더 최신)
+      // 3순위: 위치 (앞에 나온 것이 더 최신)
       return 0;
     });
     
-    // 중복 제거 - 상단(최신) 뉴스를 우선으로 하고 하단 중복은 건너뛰기
+    console.log(`Total relevant news found: ${sortedNews.length}`);
+    
+    // 중복 제거 - 관련도가 높고 최신순인 뉴스를 우선으로 선택
     const uniqueNews: any[] = [];
     
     for (const news of sortedNews) {
@@ -189,12 +257,12 @@ export async function searchCompanyNews(companyName: string): Promise<Array<{
       
       if (!isDuplicate) {
         uniqueNews.push(news);
-        console.log(`Added unique news: "${news.title}"`);
+        console.log(`Added unique news: "${news.title}" (Score: ${news.relevanceScore})`);
         
         // 3개까지만 수집
         if (uniqueNews.length >= 3) break;
       } else {
-        console.log(`Skipping duplicate news (keeping earlier one): "${news.title}"`);
+        console.log(`Skipping duplicate news: "${news.title}" (Score: ${news.relevanceScore})`);
       }
     }
     
@@ -210,19 +278,52 @@ export async function searchCompanyNews(companyName: string): Promise<Array<{
       // 링크 정리 및 검증
       let cleanLink = news.link || '';
       
+      console.log(`Processing link for news: "${news.title}"`);
+      console.log(`Original link: ${cleanLink}`);
+      
       // Google News 링크인 경우 실제 뉴스 링크로 변환 시도
       if (cleanLink.includes('news.google.com')) {
-        // Google News 링크에서 실제 뉴스 URL 추출 시도
-        const urlMatch = cleanLink.match(/url=([^&]+)/);
-        if (urlMatch) {
-          cleanLink = decodeURIComponent(urlMatch[1]);
+        console.log('Google News link detected, extracting real URL...');
+        
+        // 여러 패턴으로 실제 URL 추출 시도
+        const patterns = [
+          /url=([^&]+)/,           // url=패턴
+          /&url=([^&]+)/,          // &url=패턴
+          /article_url=([^&]+)/,   // article_url=패턴
+          /&article_url=([^&]+)/,  // &article_url=패턴
+          /q=([^&]+)/,             // q=패턴 (검색 쿼리)
+          /&q=([^&]+)/             // &q=패턴
+        ];
+        
+        let extractedUrl = null;
+        for (const pattern of patterns) {
+          const match = cleanLink.match(pattern);
+          if (match) {
+            extractedUrl = decodeURIComponent(match[1]);
+            console.log(`Extracted URL using pattern ${pattern}: ${extractedUrl}`);
+            break;
+          }
+        }
+        
+        if (extractedUrl) {
+          cleanLink = extractedUrl;
+        } else {
+          console.log('Could not extract real URL from Google News link');
         }
       }
       
-      // 링크 유효성 검사
-      if (!cleanLink || cleanLink === '정보 없음' || !isValidUrl(cleanLink)) {
-        cleanLink = '정보 없음';
+      // 링크 정리 및 검증
+      cleanLink = cleanAndValidateLink(cleanLink);
+      
+      // 링크가 유효하지 않은 경우 대안 제공
+      if (cleanLink === '정보 없음') {
+        // Google 검색 링크 생성 (회사명 + 뉴스 제목)
+        const searchQuery = encodeURIComponent(`${companyName} ${news.title}`);
+        cleanLink = `https://www.google.com/search?q=${searchQuery}&tbm=nws`;
+        console.log(`Generated Google search fallback link: ${cleanLink}`);
       }
+      
+      console.log(`Final processed link: ${cleanLink}`);
       
       return {
         id: index + 1,
@@ -336,10 +437,8 @@ async function searchNewsAlternative(companyName: string): Promise<Array<{
     const items = xmlText.match(/<item>[\s\S]*?<\/item>/g) || [];
     console.log('Found RSS items:', items.length);
     
-    // 중복 제거를 위한 뉴스 배열
-    const uniqueNews: any[] = [];
-    
-    for (const item of items) {
+    // RSS 뉴스 관련도 점수 계산 및 필터링
+    const scoredRssNews = items.map((item, index) => {
       const titleMatch = item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) || item.match(/<title>(.*?)<\/title>/);
       const linkMatch = item.match(/<link>(.*?)<\/link>/);
       const pubDateMatch = item.match(/<pubDate>(.*?)<\/pubDate>/);
@@ -350,18 +449,52 @@ async function searchNewsAlternative(companyName: string): Promise<Array<{
       const pubDate = pubDateMatch ? pubDateMatch[1].trim() : '날짜 정보 없음';
       const description = descriptionMatch ? descriptionMatch[1].trim().replace(/<[^>]*>/g, '') : '내용 없음';
       
+      console.log(`Processing RSS link for news: "${title}"`);
+      console.log(`Original RSS link: ${link}`);
+      
       // Google News 링크인 경우 실제 뉴스 링크로 변환 시도
       if (link.includes('news.google.com')) {
-        const urlMatch = link.match(/url=([^&]+)/);
-        if (urlMatch) {
-          link = decodeURIComponent(urlMatch[1]);
+        console.log('Google News RSS link detected, extracting real URL...');
+        
+        // 여러 패턴으로 실제 URL 추출 시도
+        const patterns = [
+          /url=([^&]+)/,           // url=패턴
+          /&url=([^&]+)/,          // &url=패턴
+          /article_url=([^&]+)/,   // article_url=패턴
+          /&article_url=([^&]+)/,  // &article_url=패턴
+          /q=([^&]+)/,             // q=패턴 (검색 쿼리)
+          /&q=([^&]+)/             // &q=패턴
+        ];
+        
+        let extractedUrl = null;
+        for (const pattern of patterns) {
+          const match = link.match(pattern);
+          if (match) {
+            extractedUrl = decodeURIComponent(match[1]);
+            console.log(`Extracted RSS URL using pattern ${pattern}: ${extractedUrl}`);
+            break;
+          }
+        }
+        
+        if (extractedUrl) {
+          link = extractedUrl;
+        } else {
+          console.log('Could not extract real URL from Google News RSS link');
         }
       }
       
-      // 링크 유효성 검사
-      if (!link || link === '정보 없음' || !isValidUrl(link)) {
-        link = '정보 없음';
+      // 링크 정리 및 검증
+      link = cleanAndValidateLink(link);
+      
+      // 링크가 유효하지 않은 경우 대안 제공
+      if (link === '정보 없음') {
+        // Google 검색 링크 생성 (회사명 + 뉴스 제목)
+        const searchQuery = encodeURIComponent(`${companyName} ${title}`);
+        link = `https://www.google.com/search?q=${searchQuery}&tbm=nws`;
+        console.log(`Generated Google search fallback link for RSS: ${link}`);
       }
+      
+      console.log(`Final processed RSS link: ${link}`);
       
       // 출처 추출 (링크에서 도메인 추출)
       let source = '정보 없음';
@@ -372,27 +505,119 @@ async function searchNewsAlternative(companyName: string): Promise<Array<{
         // URL 파싱 실패 시 기본값 유지
       }
       
-      // 중복 체크 - 상단(최신) 뉴스를 우선으로 하고 하단 중복은 건너뛰기
-      const isDuplicate = uniqueNews.some(existingNews => {
-        const similarity = calculateSimilarity(title.toLowerCase(), existingNews.title.toLowerCase());
+      // 관련도 점수 계산
+      const titleLower = title.toLowerCase();
+      const descLower = description.toLowerCase();
+      const companyNameLower = companyName.toLowerCase();
+      
+      let relevanceScore = 0;
+      
+      // 제목에 회사명이 포함된 경우 높은 점수
+      if (titleLower.includes(companyNameLower)) {
+        relevanceScore += 50;
+        if (titleLower.startsWith(companyNameLower)) {
+          relevanceScore += 20;
+        }
+      }
+      
+      // 내용에 회사명이 포함된 경우 점수
+      if (descLower.includes(companyNameLower)) {
+        relevanceScore += 30;
+      }
+      
+      // 고품질 콘텐츠 키워드 (인터뷰, 인사이트 등) - 높은 점수
+      const highQualityKeywords = [
+        '인터뷰', '인사이트', '대표', 'CEO', 'CTO', 'CFO', '창업자', '설립자', 
+        '시장', '전망', '분석', '전문가', '의견', '견해', '진실', '비밀', 
+        '스토리', '이야기', '경험', '조언', '팁', '노하우', '독점', '특종',
+        'Y인사이트', 'Y인터뷰', 'CEO인터뷰', '창업자이야기', '성공스토리',
+        '시장분석', '업계전망', '전문가의견', '리더십', '경영철학'
+      ];
+      const titleHighQuality = highQualityKeywords.filter(keyword => titleLower.includes(keyword));
+      const descHighQuality = highQualityKeywords.filter(keyword => descLower.includes(keyword));
+      
+      // 고품질 콘텐츠는 높은 점수 부여
+      relevanceScore += titleHighQuality.length * 15;  // 제목에 있으면 높은 점수
+      relevanceScore += descHighQuality.length * 12;   // 내용에 있으면 높은 점수
+      
+      // 최근 소식 키워드 (적당한 점수)
+      const recentNewsKeywords = [
+        '출시', '발표', '투자', '계약', '파트너십', '성장', '매출', '실적', 
+        '신제품', '기술', '혁신', '확장', '인수', '합병', '공개', '오픈',
+        '시작', '준비', '계획', '예정', '예고', '소식', '뉴스', '보도',
+        '업데이트', '업그레이드', '개선', '강화', '확대', '증가'
+      ];
+      const titleRecent = recentNewsKeywords.filter(keyword => titleLower.includes(keyword));
+      const descRecent = recentNewsKeywords.filter(keyword => descLower.includes(keyword));
+      
+      // 최근 소식은 적당한 점수 부여
+      relevanceScore += titleRecent.length * 8;   // 제목에 있으면 적당한 점수
+      relevanceScore += descRecent.length * 6;    // 내용에 있으면 적당한 점수
+      
+      // 콘텐츠 길이 점수 (긴 기사일수록 더 자세한 내용)
+      const contentLength = (title + description).length;
+      if (contentLength > 200) relevanceScore += 5;      // 200자 이상
+      if (contentLength > 500) relevanceScore += 10;     // 500자 이상
+      if (contentLength > 1000) relevanceScore += 15;    // 1000자 이상
+      
+      // 출처 신뢰도 점수
+      if (source.includes('조선') || source.includes('중앙') || source.includes('동아') || 
+          source.includes('한국경제') || source.includes('매일경제') || source.includes('서울경제')) {
+        relevanceScore += 10;
+      }
+      
+      // RSS 순서 점수 (앞에 나온 것이 더 높은 점수)
+      relevanceScore += Math.max(0, 20 - index);
+      
+      console.log(`RSS News relevance score: "${title}" - Score: ${relevanceScore}`);
+      
+      return {
+        title,
+        description: description.substring(0, 200) + (description.length > 200 ? '...' : ''),
+        date: formatNewsDate(pubDate),
+        source,
+        link,
+        relevanceScore
+      };
+    }).filter(news => news.relevanceScore > 0);
+    
+    // 관련도 + 최신순 정렬
+    const sortedRssNews = scoredRssNews.sort((a, b) => {
+      // 1순위: 관련도 점수 (높은 순)
+      if (a.relevanceScore !== b.relevanceScore) {
+        return b.relevanceScore - a.relevanceScore;
+      }
+      
+      // 2순위: 날짜 (최신순)
+      const dateA = parseNewsDate(a.date);
+      const dateB = parseNewsDate(b.date);
+      
+      if (dateA && dateB) {
+        return dateB.getTime() - dateA.getTime();
+      }
+      
+      return 0;
+    });
+    
+    // 중복 제거 - 관련도가 높고 최신순인 뉴스를 우선으로 선택
+    const uniqueNews: any[] = [];
+    
+    for (const news of sortedRssNews) {
+      const currentTitle = news.title.toLowerCase();
+      const isDuplicate = uniqueNews.some((existingNews: any) => {
+        const existingTitle = existingNews.title.toLowerCase();
+        const similarity = calculateSimilarity(currentTitle, existingTitle);
         return similarity > 0.8;
       });
       
       if (!isDuplicate) {
-        uniqueNews.push({
-          title,
-          description: description.substring(0, 200) + (description.length > 200 ? '...' : ''),
-          date: formatNewsDate(pubDate),
-          source,
-          link
-        });
-        
-        console.log(`Added unique news: "${title}"`);
+        uniqueNews.push(news);
+        console.log(`Added unique RSS news: "${news.title}" (Score: ${news.relevanceScore})`);
         
         // 3개까지만 수집
         if (uniqueNews.length >= 3) break;
       } else {
-        console.log(`Skipping duplicate news (keeping earlier one): "${title}"`);
+        console.log(`Skipping duplicate RSS news: "${news.title}" (Score: ${news.relevanceScore})`);
       }
     }
     
@@ -437,6 +662,48 @@ function isValidUrl(string: string): boolean {
   } catch (_) {
     return false;
   }
+}
+
+/**
+ * 링크 정리 및 검증
+ */
+function cleanAndValidateLink(link: string): string {
+  if (!link || link === '정보 없음' || link.trim() === '') {
+    return '정보 없음';
+  }
+  
+  let cleanLink = link.trim();
+  
+  // URL 인코딩 문제 해결
+  try {
+    // 이미 인코딩된 경우 디코딩 후 다시 인코딩
+    if (cleanLink.includes('%')) {
+      cleanLink = decodeURIComponent(cleanLink);
+    }
+  } catch (e) {
+    console.log('URL decoding failed, using original:', cleanLink);
+  }
+  
+  // 프로토콜이 없는 경우 https 추가
+  if (!cleanLink.startsWith('http://') && !cleanLink.startsWith('https://')) {
+    cleanLink = 'https://' + cleanLink;
+  }
+  
+  // URL 유효성 검사
+  if (!isValidUrl(cleanLink)) {
+    console.log('Invalid URL after cleaning:', cleanLink);
+    return '정보 없음';
+  }
+  
+  // 특수 문자 정리
+  cleanLink = cleanLink
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+  
+  return cleanLink;
 }
 
 /**

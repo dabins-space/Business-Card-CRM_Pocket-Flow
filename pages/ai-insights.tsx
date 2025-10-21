@@ -56,6 +56,7 @@ export default function AIInsights({ onNavigate, companyName, analysisData, from
   });
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [isGeneratingProposals, setIsGeneratingProposals] = useState(false);
+  const [isSavingProposals, setIsSavingProposals] = useState(false);
 
   // 제안 제품 목록
   const availableProducts = [
@@ -128,6 +129,41 @@ export default function AIInsights({ onNavigate, companyName, analysisData, from
       toast.error("제안 포인트 생성 중 오류가 발생했습니다.");
     } finally {
       setIsGeneratingProposals(false);
+    }
+  };
+
+  // 제안 포인트 저장 함수
+  const handleSaveProposals = async () => {
+    if (!analysisResult.proposalPoints || analysisResult.proposalPoints.length === 0) {
+      toast.error("저장할 제안 포인트가 없습니다.");
+      return;
+    }
+
+    setIsSavingProposals(true);
+    try {
+      const response = await fetch('/api/ai-analysis/save-proposals', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          companyName: analysisResult.company,
+          proposalPoints: analysisResult.proposalPoints
+        }),
+      });
+
+      const result = await response.json();
+      
+      if (result.ok) {
+        toast.success("제안 포인트가 저장되었습니다.");
+      } else {
+        toast.error("제안 포인트 저장에 실패했습니다.");
+      }
+    } catch (error) {
+      console.error('Save proposals error:', error);
+      toast.error("제안 포인트 저장 중 오류가 발생했습니다.");
+    } finally {
+      setIsSavingProposals(false);
     }
   };
 
@@ -1223,38 +1259,67 @@ export default function AIInsights({ onNavigate, companyName, analysisData, from
                       </div>
                     );
                   }
-                  
-                  return proposalPoints.map((point, index) => {
-                    // 각 point가 유효한 객체인지 확인
-                    if (!point || typeof point !== 'object') {
-                      console.warn('Invalid point object:', point);
-                      return null;
-                    }
-                    
-                    // 각 속성이 문자열인지 확인하고 변환
-                    const title = point.title ? String(point.title) : '제안 포인트';
-                    const solution = point.solution ? String(point.solution) : '솔루션';
-                    const description = point.description ? String(point.description) : '설명이 없습니다.';
-                    
-                    return (
-                      <div
-                        key={point.id || index}
-                        className="p-4 rounded-lg border border-border hover:border-primary/50 transition-colors"
-                      >
-                        <div className="flex items-start justify-between mb-2">
-                          <h4 className="font-semibold text-foreground">
-                            {title}
-                          </h4>
-                          <Badge variant="secondary" className="text-xs">
-                            {solution}
-                          </Badge>
-                        </div>
-                        <p className="text-muted-foreground text-sm">
-                          {description}
-                        </p>
+
+                  return (
+                    <div className="space-y-4">
+                      {/* 저장 버튼 */}
+                      <div className="flex justify-end">
+                        <Button
+                          onClick={handleSaveProposals}
+                          disabled={isSavingProposals}
+                          size="sm"
+                          className="gap-2"
+                        >
+                          {isSavingProposals ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                              저장 중...
+                            </>
+                          ) : (
+                            <>
+                              <Save className="w-4 h-4" />
+                              제안 포인트 저장
+                            </>
+                          )}
+                        </Button>
                       </div>
-                    );
-                  }).filter(Boolean);
+                      
+                      {/* 제안 포인트 목록 */}
+                      <div className="space-y-3">
+                        {proposalPoints.map((point, index) => {
+                          // 각 point가 유효한 객체인지 확인
+                          if (!point || typeof point !== 'object') {
+                            console.warn('Invalid point object:', point);
+                            return null;
+                          }
+                          
+                          // 각 속성이 문자열인지 확인하고 변환
+                          const title = point.title ? String(point.title) : '제안 포인트';
+                          const solution = point.solution ? String(point.solution) : '솔루션';
+                          const description = point.description ? String(point.description) : '설명이 없습니다.';
+                          
+                          return (
+                            <div
+                              key={point.id || index}
+                              className="p-4 rounded-lg border border-border hover:border-primary/50 transition-colors"
+                            >
+                              <div className="flex items-start justify-between mb-2">
+                                <h4 className="font-semibold text-foreground">
+                                  {title}
+                                </h4>
+                                <Badge variant="secondary" className="text-xs">
+                                  {solution}
+                                </Badge>
+                              </div>
+                              <p className="text-muted-foreground text-sm">
+                                {description}
+                              </p>
+                            </div>
+                          );
+                        }).filter(Boolean)}
+                      </div>
+                    </div>
+                  );
                 })()}
               </div>
               
