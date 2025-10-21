@@ -144,31 +144,48 @@ function extractFieldsFromText(text: string): OCRFields {
     }
   }
 
-  // Name: 간단한 이름 추출 로직 (먼저 실행)
+  // 정규식 패턴들을 먼저 정의
+  const titleRegex = /(대표|사장|부사장|전무|상무|이사|부장|차장|과장|대리|주임|팀장|실장|원장|교수|CEO|CTO|CFO|COO)/i
+  const deptRegex = /(부|팀|실|센터|연구소|사업부|영업부|마케팅|개발|기획|인사|총무|재무|회계|본부|Department|Dept)/i
+  const companyRegex = /(주식회사|\(주\)|\(사\)|회사|Corp|Inc|Ltd|Co\.|㈜|Group|그룹|기업|기술|솔루션|시스템|컨설팅|아이티|IT|소프트웨어|하드웨어)/i
+
+  // Name: 개선된 이름 추출 로직
   if (lines.length) {
     // 한국어 이름 패턴 (2-4글자)
     const koreanNameRegex = /^[가-힣]{2,4}$/
+    
+    // 이름 후보들을 수집
+    const nameCandidates: string[] = []
     
     for (const line of lines) {
       // 한국어 이름 패턴이고, 이메일이나 전화번호가 아닌 경우
       if (koreanNameRegex.test(line) && 
           !line.includes('@') &&
-          !line.match(/[0-9+\-\s]/)) {
-        fields.name = line
-        console.log('Found name:', fields.name)
-        break
+          !line.match(/[0-9+\-\s]/) &&
+          !companyRegex.test(line) &&
+          !titleRegex.test(line) &&
+          !deptRegex.test(line)) {
+        nameCandidates.push(line)
       }
     }
     
-    // 이름을 찾지 못한 경우 첫 번째 줄 사용
-    if (!fields.name && lines.length > 0) {
-      fields.name = lines[0]
-      console.log('Using first line as name:', fields.name)
+    // 이름 후보가 있으면 첫 번째를 선택
+    if (nameCandidates.length > 0) {
+      fields.name = nameCandidates[0]
+      console.log('Found name:', fields.name)
+    } else if (lines.length > 0) {
+      // 이름을 찾지 못한 경우 첫 번째 줄이 회사명이 아닌지 확인
+      const firstLine = lines[0]
+      if (!companyRegex.test(firstLine) && 
+          !firstLine.includes('@') && 
+          !firstLine.match(/^[0-9+\-\s]+$/)) {
+        fields.name = firstLine
+        console.log('Using first line as name:', fields.name)
+      }
     }
   }
 
   // Title - 간단한 패턴
-  const titleRegex = /(대표|사장|부사장|전무|상무|이사|부장|차장|과장|대리|주임|팀장|실장|원장|교수|CEO|CTO|CFO|COO)/i
   for (const line of lines) {
     if (titleRegex.test(line)) {
       fields.title = line
@@ -178,7 +195,6 @@ function extractFieldsFromText(text: string): OCRFields {
   }
 
   // Department - 간단한 패턴
-  const deptRegex = /(부|팀|실|센터|연구소|사업부|영업부|마케팅|개발|기획|인사|총무|재무|회계|본부|Department|Dept)/i
   for (const line of lines) {
     if (deptRegex.test(line)) {
       fields.department = line
@@ -187,23 +203,31 @@ function extractFieldsFromText(text: string): OCRFields {
     }
   }
 
-  // Company indicators - 간단한 패턴
-  const companyRegex = /(주식회사|\(주\)|\(사\)|회사|Corp|Inc|Ltd|Co\.|㈜|Group|그룹|기업)/i
+  // Company indicators - 개선된 패턴
+  const companyCandidates: string[] = []
+  
   for (const line of lines) {
     if (companyRegex.test(line)) {
-      fields.company = line
-      console.log('Found company:', fields.company)
-      break
+      companyCandidates.push(line)
     }
   }
   
-  // 회사명을 찾지 못한 경우, 첫 번째 줄이 회사명일 가능성 체크
-  if (!fields.company && lines.length > 0) {
-    const firstLine = lines[0]
-    // 이메일이나 전화번호가 아닌 경우
-    if (!firstLine.includes('@') && !firstLine.match(/^[0-9+\-\s]+$/)) {
-      fields.company = firstLine
-      console.log('Using first line as company:', fields.company)
+  // 회사명 후보가 있으면 첫 번째를 선택
+  if (companyCandidates.length > 0) {
+    fields.company = companyCandidates[0]
+    console.log('Found company:', fields.company)
+  } else {
+    // 회사명을 찾지 못한 경우, 이름이 아닌 첫 번째 줄을 회사명으로 사용
+    for (const line of lines) {
+      if (line !== fields.name && 
+          !line.includes('@') && 
+          !line.match(/^[0-9+\-\s]+$/) &&
+          !titleRegex.test(line) &&
+          !deptRegex.test(line)) {
+        fields.company = line
+        console.log('Using line as company:', fields.company)
+        break
+      }
     }
   }
 
@@ -257,6 +281,16 @@ function normalizePhone(phone: string): string {
   // 9자리 (02 지역번호)
   if (cleaned.length === 9 && cleaned.startsWith('02')) {
     return `${cleaned.slice(0, 2)}-${cleaned.slice(2, 5)}-${cleaned.slice(5)}`
+  }
+
+  // 8자리 (02 지역번호, 일부 번호)
+  if (cleaned.length === 8 && cleaned.startsWith('02')) {
+    return `${cleaned.slice(0, 2)}-${cleaned.slice(2, 5)}-${cleaned.slice(5)}`
+  }
+
+  // 11자리 일반 전화번호 (지역번호 3자리)
+  if (cleaned.length === 11 && !cleaned.startsWith('010')) {
+    return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 7)}-${cleaned.slice(7)}`
   }
 
   console.log('Returning original phone:', phone)
