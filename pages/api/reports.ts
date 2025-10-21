@@ -115,9 +115,9 @@ export default async function handler(
       .lte('created_at', lastMonthEnd.toISOString())
 
     const growthRate = lastMonth && thisMonth 
-      ? ((thisMonth - lastMonth) / lastMonth * 100).toFixed(0)
+      ? ((thisMonth - lastMonth) / lastMonth * 100)
       : 0
-    const trend = growthRate > 0 ? `+${growthRate}%` : `${growthRate}%`
+    const trend = growthRate > 0 ? `+${growthRate.toFixed(0)}%` : `${growthRate.toFixed(0)}%`
 
     // 7. 산업군 분포 (회사명 기반으로 추정)
     const { data: allContacts } = await supabase
