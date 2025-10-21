@@ -101,7 +101,7 @@ export default async function handler(
       .not('importance', 'is', null)
 
     const avgImportance = importanceData?.length 
-      ? (importanceData.reduce((sum, c) => sum + (c.importance || 0), 0) / importanceData.length).toFixed(1)
+      ? (importanceData.reduce((sum, c) => sum + (c.importance || 0), 0) / importanceData.length)
       : 0
 
     // 6. 성장률 계산 (이번 달 vs 지난 달)
@@ -229,7 +229,7 @@ export default async function handler(
         thisMonth: thisMonth || 0,
         totalCompanies,
         aiInsights: aiInsights || 0,
-        avgImportance: parseFloat(avgImportance),
+        avgImportance: Number(avgImportance.toFixed(1)),
         trend
       },
       industryData,
