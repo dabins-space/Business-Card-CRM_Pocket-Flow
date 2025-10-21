@@ -1,12 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
-import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
-import { Label } from "../components/ui/label";
-import { Alert, AlertDescription } from "../components/ui/alert";
-import { Building2, AlertCircle } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 
 interface AuthPageProps {
@@ -37,72 +31,115 @@ export default function AuthPage({ onNavigate }: AuthPageProps) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <Building2 className="mx-auto h-12 w-12 text-primary mb-4" />
-          <h1 className="text-2xl font-bold">명함 관리 시스템</h1>
-          <p className="text-muted-foreground mt-2">
+    <div style={{ 
+      minHeight: '100vh', 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      padding: '20px',
+      backgroundColor: '#f5f5f5'
+    }}>
+      <div style={{ 
+        width: '100%', 
+        maxWidth: '400px',
+        backgroundColor: 'white',
+        padding: '30px',
+        borderRadius: '8px',
+        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+      }}>
+        <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+          <h1 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '10px' }}>
+            명함 관리 시스템
+          </h1>
+          <p style={{ color: '#666' }}>
             사전 등록된 계정으로 로그인하세요
           </p>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>로그인</CardTitle>
-            <CardDescription>
-              관리자가 등록한 계정으로 로그인하세요
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">이메일</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="이메일을 입력하세요"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="password">비밀번호</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="비밀번호를 입력하세요"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-              </div>
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>
+              이메일
+            </label>
+            <input
+              type="email"
+              placeholder="이메일을 입력하세요"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              style={{
+                width: '100%',
+                padding: '12px',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                fontSize: '16px',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+          
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>
+              비밀번호
+            </label>
+            <input
+              type="password"
+              placeholder="비밀번호를 입력하세요"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              style={{
+                width: '100%',
+                padding: '12px',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                fontSize: '16px',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
 
-              {error && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-
-              <Button 
-                type="submit" 
-                className="w-full" 
-                disabled={loading}
-              >
-                {loading ? "로그인 중..." : "로그인"}
-              </Button>
-            </form>
-
-            <div className="mt-6 text-center text-sm text-muted-foreground">
-              <p>테스트 계정:</p>
-              <p>이메일: test@example.com</p>
-              <p>비밀번호: password123</p>
+          {error && (
+            <div style={{ 
+              color: 'red', 
+              marginBottom: '20px', 
+              padding: '10px',
+              backgroundColor: '#fee',
+              border: '1px solid #fcc',
+              borderRadius: '4px'
+            }}>
+              {error}
             </div>
-          </CardContent>
-        </Card>
+          )}
+
+          <button 
+            type="submit" 
+            disabled={loading}
+            style={{
+              width: '100%',
+              padding: '12px',
+              backgroundColor: loading ? '#ccc' : '#007bff',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              fontSize: '16px',
+              cursor: loading ? 'not-allowed' : 'pointer'
+            }}
+          >
+            {loading ? "로그인 중..." : "로그인"}
+          </button>
+        </form>
+
+        <div style={{ 
+          marginTop: '20px', 
+          textAlign: 'center', 
+          fontSize: '14px', 
+          color: '#666' 
+        }}>
+          <p><strong>테스트 계정:</strong></p>
+          <p>이메일: test@example.com</p>
+          <p>비밀번호: password123</p>
+        </div>
       </div>
     </div>
   );
