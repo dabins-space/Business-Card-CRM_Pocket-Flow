@@ -7,18 +7,31 @@ interface ApplyAIAnalysisRequest {
     company: string;
     overview: string;
     industry: string;
+    solutions: string[];
     employees: string;
     founded: string;
     website: string;
-    opportunities: Array<{
+    sources: string[];
+    sourceDetails: {
+      overview: string;
+      industry: string;
+      employees: string;
+      founded: string;
+    };
+    recentNews: Array<{
       id: number;
       title: string;
       description: string;
-      priority: 'high' | 'medium' | 'low';
-      impact: string;
-      timeline: string;
+      date: string;
+      source: string;
+      link: string;
     }>;
-    proposalPoints: string[];
+    proposalPoints: Array<{
+      id: number;
+      title: string;
+      description: string;
+      solution: string;
+    }>;
   };
 }
 

@@ -169,6 +169,61 @@ export default function CustomerDetail({ onNavigate, contactId }: CustomerDetail
     }
   };
 
+  const handleViewAIAnalysis = async () => {
+    if (!cardData?.company) {
+      toast.error("회사 정보가 없습니다");
+      return;
+    }
+
+    try {
+      console.log('=== Customer Detail AI Analysis Debug ===');
+      console.log('Company name:', cardData.company);
+      console.log('onNavigate function:', onNavigate);
+      
+      // 해당 회사의 최근 AI 분석 결과를 가져오기
+      const response = await fetch('/api/ai-analysis/get-latest', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ companyName: cardData.company })
+      });
+      
+      const result = await response.json();
+      console.log('AI Analysis API response:', result);
+      
+      if (result.ok && result.analysis) {
+        // 분석 데이터를 JSON으로 인코딩하여 AI 인사이트 페이지로 전달
+        const analysisData = encodeURIComponent(JSON.stringify(result.analysis));
+        const navigationUrl = `/ai-insights?company=${encodeURIComponent(cardData.company)}&analysisData=${analysisData}&fromCustomer=true`;
+        console.log('Navigation URL:', navigationUrl);
+        
+        if (onNavigate) {
+          onNavigate(navigationUrl);
+          toast.success(`${cardData.company}의 AI 분석 결과를 불러왔습니다`);
+        } else {
+          console.error('onNavigate function is not available');
+          toast.error("네비게이션 함수를 사용할 수 없습니다");
+        }
+      } else {
+        // AI 분석 결과가 없는 경우 새로 분석하도록 안내
+        const navigationUrl = `/ai-insights?company=${encodeURIComponent(cardData.company)}`;
+        console.log('No analysis found, navigation URL:', navigationUrl);
+        
+        if (onNavigate) {
+          onNavigate(navigationUrl);
+          toast.info(`${cardData.company}의 AI 분석 결과가 없습니다. 새로 분석을 시작합니다.`);
+        } else {
+          console.error('onNavigate function is not available');
+          toast.error("네비게이션 함수를 사용할 수 없습니다");
+        }
+      }
+    } catch (error: any) {
+      console.error('Failed to load AI analysis:', error);
+      toast.error("AI 분석 결과를 불러오는데 실패했습니다");
+    }
+  };
+
   const loadContactHistory = async () => {
     if (!contactId) return;
     
@@ -640,14 +695,6 @@ export default function CustomerDetail({ onNavigate, contactId }: CustomerDetail
               </Button>
             </>
           )}
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() => onNavigate && onNavigate("/ai-insights")}
-          >
-            <Sparkles className="w-4 h-4" />
-            AI 분석
-          </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="destructive" className="gap-2">
@@ -975,7 +1022,7 @@ export default function CustomerDetail({ onNavigate, contactId }: CustomerDetail
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => onNavigate && onNavigate("/ai-insights")}
+                    onClick={handleViewAIAnalysis}
                     className="gap-2"
                   >
                     <Sparkles className="w-4 h-4" />
@@ -988,67 +1035,136 @@ export default function CustomerDetail({ onNavigate, contactId }: CustomerDetail
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
                     <p className="text-muted-foreground">AI 분석 결과를 불러오는 중...</p>
                   </div>
-                ) : (
-                  <div className="p-4 rounded-lg bg-muted/50 border border-border">
-                    <h4 className="text-foreground mb-2 flex items-center gap-2">
-                      <Building2 className="w-4 h-4" />
-                      회사 개요
-                    </h4>
-                    <p className="text-muted-foreground leading-relaxed">
-                      {aiInsight?.overview || "AI 분석 결과가 없습니다."}
-                    </p>
-                  </div>
-                )}
+                ) : aiInsight?.overview && aiInsight.overview !== "AI 분석 결과가 없습니다. AI 인사이트 페이지에서 분석을 실행해주세요." ? (
+                  <div className="space-y-4">
+                    {/* 회사 개요 */}
+                    <div className="p-4 rounded-lg bg-muted/50 border border-border">
+                      <h4 className="text-foreground mb-2 flex items-center gap-2">
+                        <Building2 className="w-4 h-4" />
+                        회사 개요
+                      </h4>
+                      <p className="text-muted-foreground leading-relaxed">
+                        {aiInsight.overview}
+                      </p>
+                    </div>
 
-                {aiInsight?.opportunities && aiInsight.opportunities.length > 0 && (
-                  <div>
-                    <h4 className="text-foreground mb-3 flex items-center gap-2">
-                      <Lightbulb className="w-4 h-4" />
-                      비즈니스 기회
-                    </h4>
-                    <div className="space-y-3">
-                      {aiInsight.opportunities.map((opportunity: any) => (
-                        <div
-                          key={opportunity.id}
-                          className="p-4 rounded-lg border border-border"
-                        >
-                          <div className="flex items-start justify-between mb-2">
-                            <h3 className="text-foreground">{opportunity.title}</h3>
-                            <Badge className={getPriorityColor(opportunity.priority)}>
-                              {opportunity.priority === "high" ? "높음" : 
-                               opportunity.priority === "medium" ? "중간" : "낮음"}
-                            </Badge>
+                    {/* 산업 정보 */}
+                    {aiInsight.industry && (
+                      <div className="p-4 rounded-lg bg-muted/50 border border-border">
+                        <h4 className="text-foreground mb-2 flex items-center gap-2">
+                          <Briefcase className="w-4 h-4" />
+                          산업 정보
+                        </h4>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <p className="text-muted-foreground text-sm">산업</p>
+                            <p className="text-foreground">{aiInsight.industry}</p>
                           </div>
-                          <p className="text-muted-foreground">{opportunity.description}</p>
+                          {aiInsight.employees && (
+                            <div>
+                              <p className="text-muted-foreground text-sm">직원 수</p>
+                              <p className="text-foreground">{aiInsight.employees}</p>
+                            </div>
+                          )}
+                          {aiInsight.founded && (
+                            <div>
+                              <p className="text-muted-foreground text-sm">설립연도</p>
+                              <p className="text-foreground">{aiInsight.founded}</p>
+                            </div>
+                          )}
+                          {aiInsight.website && (
+                            <div>
+                              <p className="text-muted-foreground text-sm">웹사이트</p>
+                              <a 
+                                href={aiInsight.website.startsWith('http') ? aiInsight.website : `https://${aiInsight.website}`}
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-foreground hover:text-primary transition-colors cursor-pointer underline"
+                              >
+                                {aiInsight.website}
+                              </a>
+                            </div>
+                          )}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                      </div>
+                    )}
 
-                {aiInsight?.proposalPoints && aiInsight.proposalPoints.length > 0 && (
-                  <div>
-                    <h4 className="text-foreground mb-3 flex items-center gap-2">
+
+                    {/* 최근 뉴스 */}
+                    {aiInsight.recentNews && aiInsight.recentNews.length > 0 && (
+                      <div>
+                        <h4 className="text-foreground mb-3 flex items-center gap-2">
+                          <Calendar className="w-4 h-4" />
+                          최근 뉴스
+                        </h4>
+                        <div className="space-y-2">
+                          {aiInsight.recentNews.map((news: any, index: number) => {
+                            const newsTitle = (news as any).title || (news as any).name || String(news);
+                            const newsUrl = (news as any).url || (news as any).link;
+                            
+                            return (
+                              <div key={index} className="p-3 rounded-lg bg-muted/30 border border-border">
+                                {newsUrl ? (
+                                  <a 
+                                    href={newsUrl} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="text-foreground hover:text-primary transition-colors cursor-pointer underline"
+                                  >
+                                    {newsTitle}
+                                  </a>
+                                ) : (
+                                  <p className="text-foreground">{newsTitle}</p>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 제안 포인트 */}
+                    {aiInsight.proposalPoints && aiInsight.proposalPoints.length > 0 && (
+                      <div>
+                        <h4 className="text-foreground mb-3 flex items-center gap-2">
+                          <Target className="w-4 h-4" />
+                          제안 포인트
+                        </h4>
+                        <div className="space-y-2">
+                          {aiInsight.proposalPoints.map((point: any, index: number) => (
+                            <div key={index} className="p-3 rounded-lg bg-muted/30 border border-border">
+                              <p className="text-foreground">{(point as any).title || (point as any).name || String(point)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 전체 인사이트 보기 버튼 */}
+                    <Button
+                      className="w-full gap-2"
+                      onClick={handleViewAIAnalysis}
+                    >
                       <Target className="w-4 h-4" />
-                      제안 포인트
-                    </h4>
-                    <div className="space-y-2">
-                      {aiInsight.proposalPoints.map((point: string, index: number) => (
-                        <div key={index} className="p-3 rounded-lg bg-muted/30 border border-border">
-                          <p className="text-foreground">{point}</p>
-                        </div>
-                      ))}
-                    </div>
+                      전체 인사이트 보기
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="p-8 text-center">
+                    <Sparkles className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-foreground mb-2">AI 분석 결과가 없습니다</h3>
+                    <p className="text-muted-foreground mb-4">
+                      {cardData?.company}에 대한 AI 분석을 실행해보세요.
+                    </p>
+                    <Button
+                      onClick={handleViewAIAnalysis}
+                      className="gap-2"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      AI 분석 시작하기
+                    </Button>
                   </div>
                 )}
-
-                <Button
-                  className="w-full gap-2"
-                  onClick={() => onNavigate && onNavigate("/ai-insights")}
-                >
-                  <Target className="w-4 h-4" />
-                  전체 인사이트 보기
-                </Button>
               </TabsContent>
 
               {/* 히스토리 탭 */}

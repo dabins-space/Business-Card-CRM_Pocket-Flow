@@ -12,18 +12,31 @@ interface AIAnalysisResponse {
     company: string
     overview: string
     industry: string
+    solutions: string[]
     employees: string
     founded: string
     website: string
-    opportunities: Array<{
+    sources: string[]
+    sourceDetails: {
+      overview: string
+      industry: string
+      employees: string
+      founded: string
+    }
+    recentNews: Array<{
       id: number
       title: string
       description: string
-      priority: string
-      impact: string
-      timeline: string
+      date: string
+      source: string
+      link: string
     }>
-    proposalPoints: string[]
+    proposalPoints: Array<{
+      id: number
+      title: string
+      description: string
+      solution: string
+    }>
   }
   error?: string
 }
@@ -61,14 +74,13 @@ export default async function handler(
 
     console.log('Found contacts:', contacts?.length || 0)
 
-    if (!contacts || contacts.length === 0) {
-      return res.status(404).json({ ok: false, error: 'No contacts found for this company' })
-    }
+    // 연락처가 없어도 웹 검색을 통해 분석 가능
+    const contactsToUse = contacts || [];
 
     // ChatGPT API를 사용한 실제 AI 분석
     const aiRequest: AIAnalysisRequest = {
       companyName,
-      contacts: contacts
+      contacts: contactsToUse
     };
 
     console.log('Starting ChatGPT analysis...');

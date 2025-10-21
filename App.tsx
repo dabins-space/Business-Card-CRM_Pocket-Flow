@@ -10,6 +10,7 @@ const Toaster = dynamic(() => import("./components/ui/sonner").then(mod => ({ de
 import HomePage from "./pages/home";
 import UploadPage from "./pages/upload";
 import AIInsightsPage from "./pages/ai-insights";
+import AIHistoryPage from "./pages/ai-history";
 import CustomersPage from "./pages/customers";
 import CustomerDetailPage from "./pages/customer-detail";
 import ReportsPage from "./pages/reports";
@@ -43,7 +44,15 @@ function AppContent() {
       case "/upload":
         return <UploadPage onNavigate={handleNavigation} />;
       case "/ai-insights":
-        return <AIInsightsPage onNavigate={handleNavigation} />;
+        return <AIInsightsPage 
+          onNavigate={handleNavigation} 
+          companyName={pageParams.company}
+          analysisData={pageParams.analysisData}
+          fromHistory={pageParams.fromHistory}
+          fromCustomer={pageParams.fromCustomer}
+        />;
+      case "/ai-history":
+        return <AIHistoryPage onNavigate={handleNavigation} />;
       case "/customers":
         return <CustomersPage onNavigate={handleNavigation} />;
       case "/customer-detail":

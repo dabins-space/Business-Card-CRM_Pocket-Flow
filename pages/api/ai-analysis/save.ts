@@ -7,18 +7,31 @@ interface SaveAIAnalysisRequest {
     company: string;
     overview: string;
     industry: string;
+    solutions: string[];
     employees: string;
     founded: string;
     website: string;
-    opportunities: Array<{
+    sources: string[];
+    sourceDetails: {
+      overview: string;
+      industry: string;
+      employees: string;
+      founded: string;
+    };
+    recentNews: Array<{
       id: number;
       title: string;
       description: string;
-      priority: 'high' | 'medium' | 'low';
-      impact: string;
-      timeline: string;
+      date: string;
+      source: string;
+      link: string;
     }>;
-    proposalPoints: string[];
+    proposalPoints: Array<{
+      id: number;
+      title: string;
+      description: string;
+      solution: string;
+    }>;
   };
 }
 
@@ -62,6 +75,15 @@ export default async function handler(
 
     if (error) {
       console.error('Supabase save error:', error);
+      
+      // 테이블이 존재하지 않는 경우 특별한 오류 메시지
+      if (error.message.includes('relation "ai_analysis_history" does not exist')) {
+        return res.status(500).json({ 
+          ok: false, 
+          error: 'AI 분석 히스토리 테이블이 존재하지 않습니다. 관리자에게 문의하세요.' 
+        });
+      }
+      
       return res.status(500).json({ 
         ok: false, 
         error: `Failed to save AI analysis: ${error.message}` 

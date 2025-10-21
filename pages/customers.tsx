@@ -13,7 +13,7 @@ import {
 } from "../components/ui/select";
 import { EmptyState } from "../components/EmptyState";
 import { LoadingState } from "../components/LoadingState";
-import { Search, Filter, Camera, CreditCard, Building2, Mail, Phone, Users, Trash2 } from "lucide-react";
+import { Search, Filter, Camera, CreditCard, Building2, Mail, Phone, Users, Trash2, Sparkles } from "lucide-react";
 import { Badge } from "../components/ui/badge";
 import { getVerticalLabel, VERTICAL_OPTIONS } from "../constants/data";
 import { getImportanceColor } from "../utils/helpers";
@@ -120,6 +120,56 @@ export default function Customers({ onNavigate }: CustomersPageProps) {
     } catch (error: any) {
       console.error('Delete error:', error);
       toast.error("삭제 중 오류가 발생했습니다");
+    }
+  };
+
+  const handleViewAIAnalysis = async (companyName: string) => {
+    try {
+      console.log('=== Customer AI Analysis Debug ===');
+      console.log('Company name:', companyName);
+      console.log('onNavigate function:', onNavigate);
+      
+      // 해당 회사의 최근 AI 분석 결과를 가져오기
+      const response = await fetch('/api/ai-analysis/get-latest', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ companyName })
+      });
+      
+      const result = await response.json();
+      console.log('AI Analysis API response:', result);
+      
+      if (result.ok && result.analysis) {
+        // 분석 데이터를 JSON으로 인코딩하여 AI 인사이트 페이지로 전달
+        const analysisData = encodeURIComponent(JSON.stringify(result.analysis));
+        const navigationUrl = `/ai-insights?company=${encodeURIComponent(companyName)}&analysisData=${analysisData}&fromCustomer=true`;
+        console.log('Navigation URL:', navigationUrl);
+        
+        if (onNavigate) {
+          onNavigate(navigationUrl);
+          toast.success(`${companyName}의 AI 분석 결과를 불러왔습니다`);
+        } else {
+          console.error('onNavigate function is not available');
+          toast.error("네비게이션 함수를 사용할 수 없습니다");
+        }
+      } else {
+        // AI 분석 결과가 없는 경우 새로 분석하도록 안내
+        const navigationUrl = `/ai-insights?company=${encodeURIComponent(companyName)}`;
+        console.log('No analysis found, navigation URL:', navigationUrl);
+        
+        if (onNavigate) {
+          onNavigate(navigationUrl);
+          toast.info(`${companyName}의 AI 분석 결과가 없습니다. 새로 분석을 시작합니다.`);
+        } else {
+          console.error('onNavigate function is not available');
+          toast.error("네비게이션 함수를 사용할 수 없습니다");
+        }
+      }
+    } catch (error: any) {
+      console.error('Failed to load AI analysis:', error);
+      toast.error("AI 분석 결과를 불러오는데 실패했습니다");
     }
   };
 
@@ -296,6 +346,22 @@ export default function Customers({ onNavigate }: CustomersPageProps) {
 
                 <div className="text-muted-foreground pt-2 border-t border-border">
                   {card.date}
+                </div>
+
+                {/* AI 분석 버튼 */}
+                <div className="pt-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full gap-2"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleViewAIAnalysis(card.company);
+                    }}
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    AI 분석 보기
+                  </Button>
                 </div>
               </CardContent>
             </Card>

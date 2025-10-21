@@ -47,6 +47,15 @@ export default async function handler(
         return res.status(404).json({ ok: false, error: 'No AI analysis found for this company' });
       }
       
+      // 테이블이 존재하지 않는 경우 특별한 오류 메시지
+      if (error.message.includes('relation "ai_analysis_history" does not exist')) {
+        console.error('AI analysis history table does not exist');
+        return res.status(500).json({ 
+          ok: false, 
+          error: 'AI 분석 히스토리 테이블이 존재하지 않습니다. 관리자에게 문의하세요.' 
+        });
+      }
+      
       console.error('Supabase error:', error);
       return res.status(500).json({ 
         ok: false, 
@@ -56,10 +65,29 @@ export default async function handler(
 
     console.log('Latest AI analysis found:', latestAnalysis.id);
 
+    // analysis_data가 유효한 객체인지 확인
+    const analysisData = latestAnalysis.analysis_data;
+    const safeAnalysisData = analysisData && typeof analysisData === 'object' ? analysisData : {};
+
     res.status(200).json({
       ok: true,
       analysis: {
-        ...latestAnalysis.analysis_data,
+        company: safeAnalysisData.company || '회사명 없음',
+        overview: safeAnalysisData.overview || '분석 정보가 없습니다.',
+        industry: safeAnalysisData.industry || '정보 없음',
+        solutions: Array.isArray(safeAnalysisData.solutions) ? safeAnalysisData.solutions : [],
+        employees: safeAnalysisData.employees || '정보 없음',
+        founded: safeAnalysisData.founded || '정보 없음',
+        website: safeAnalysisData.website || '정보 없음',
+        sources: Array.isArray(safeAnalysisData.sources) ? safeAnalysisData.sources : [],
+        sourceDetails: safeAnalysisData.sourceDetails || {
+          overview: "정보가 제한적",
+          industry: "정보가 제한적",
+          employees: "정보가 제한적",
+          founded: "정보가 제한적"
+        },
+        recentNews: Array.isArray(safeAnalysisData.recentNews) ? safeAnalysisData.recentNews : [],
+        proposalPoints: Array.isArray(safeAnalysisData.proposalPoints) ? safeAnalysisData.proposalPoints : [],
         lastAnalyzed: new Date(latestAnalysis.created_at).toLocaleDateString('ko-KR'),
         analysisId: latestAnalysis.id
       }
