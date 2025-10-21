@@ -94,33 +94,56 @@ export default async function handler(
 function extractFieldsFromText(text: string): OCRFields {
   const fields: OCRFields = {}
   
+  console.log('=== Starting field extraction ===')
+  console.log('Input text:', text)
+  
   // 텍스트를 줄별로 분리
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean)
-  console.log('Original text:', text)
   console.log('Lines:', lines)
 
-  // Email - 개선된 패턴
-  const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g
+  // Email - 간단하고 빠른 패턴
+  const emailRegex = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g
   const emailMatches = text.match(emailRegex)
   if (emailMatches && emailMatches.length > 0) {
-    // 가장 일반적인 이메일 형식 선택 (gmail, naver, daum 등)
-    const commonDomains = ['gmail.com', 'naver.com', 'daum.net', 'hanmail.net', 'yahoo.com', 'hotmail.com']
-    const preferredEmail = emailMatches.find(email => 
-      commonDomains.some(domain => email.toLowerCase().includes(domain))
-    )
-    fields.email = preferredEmail || emailMatches[0]
+    fields.email = emailMatches[0]
     console.log('Found email:', fields.email)
   }
 
-  // Phone (KR) - 핸드폰 번호 우선 분석
-  // 다양한 핸드폰 번호 패턴
+  // Phone - 핸드폰 번호만 (더 포괄적인 패턴)
   const mobilePatterns = [
-    /\+82[-.\s]?10[-.\s]?[0-9]{4}[-.\s]?[0-9]{4}/g,  // +82-10-1234-5678
-    /010[-.\s]?[0-9]{4}[-.\s]?[0-9]{4}/g,            // 010-1234-5678
-    /010[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}/g,            // 010-123-4567
-    /010[0-9]{8}/g,                                   // 01012345678
+    /\+82[-.\s]?10[-.\s]?[0-9]{4}[-.\s]?[0-9]{4}/g,  // +82-10-1234-5678, +82.10.1234.5678, +82 10 1234 5678
     /\+8210[0-9]{8}/g,                               // +821012345678
-    /\+82[0-9]{11}/g,                                // +821098765432 (연속된 숫자)
+    /010[-.\s]?[0-9]{4}[-.\s]?[0-9]{4}/g,            // 010-1234-5678, 010.1234.5678, 010 1234 5678
+    /010[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}/g,            // 010-123-4567, 010.123.4567, 010 123 4567
+    /010[0-9]{8}/g,                                   // 01012345678
+    /01[0-9][-.\s]?[0-9]{4}[-.\s]?[0-9]{4}/g,        // 011-1234-5678, 016-1234-5678, 017-1234-5678, 018-1234-5678, 019-1234-5678
+    /01[0-9][-.\s]?[0-9]{3}[-.\s]?[0-9]{4}/g,        // 011-123-4567, 016-123-4567, 017-123-4567, 018-123-4567, 019-123-4567
+    /01[0-9][0-9]{8}/g,                              // 01112345678, 01612345678, 01712345678, 01812345678, 01912345678
+    // 점과 띄어쓰기가 섞인 패턴들
+    /010\.\s[0-9]{4}\.\s[0-9]{4}/g,                  // 010. 1234. 5678
+    /010\.\s[0-9]{3}\.\s[0-9]{4}/g,                  // 010. 123. 4567
+    /01[0-9]\.\s[0-9]{4}\.\s[0-9]{4}/g,              // 011. 1234. 5678, 016. 1234. 5678, 017. 1234. 5678, 018. 1234. 5678, 019. 1234. 5678
+    /01[0-9]\.\s[0-9]{3}\.\s[0-9]{4}/g,              // 011. 123. 4567, 016. 123. 4567, 017. 123. 4567, 018. 123. 4567, 019. 123. 4567
+    // 점과 여러 띄어쓰기가 섞인 패턴들
+    /010\.\s{2,}[0-9]{4}\.\s{2,}[0-9]{4}/g,          // 010.  1234.  5678 (두 번 이상의 띄어쓰기)
+    /010\.\s{2,}[0-9]{3}\.\s{2,}[0-9]{4}/g,          // 010.  123.  4567 (두 번 이상의 띄어쓰기)
+    /01[0-9]\.\s{2,}[0-9]{4}\.\s{2,}[0-9]{4}/g,      // 01x.  1234.  5678 (두 번 이상의 띄어쓰기)
+    /01[0-9]\.\s{2,}[0-9]{3}\.\s{2,}[0-9]{4}/g,      // 01x.  123.  4567 (두 번 이상의 띄어쓰기)
+    // 더 복잡한 패턴들 (띄어쓰기 개수 무제한)
+    /010[-.\s]*[0-9]{4}[-.\s]*[0-9]{4}/g,            // 010-1234-5678, 010.1234.5678, 010 1234 5678, 010. 1234. 5678, 010- 1234 -5678
+    /010[-.\s]*[0-9]{3}[-.\s]*[0-9]{4}/g,            // 010-123-4567, 010.123.4567, 010 123 4567, 010. 123. 4567, 010- 123 -4567
+    /01[0-9][-.\s]*[0-9]{4}[-.\s]*[0-9]{4}/g,        // 01x-1234-5678, 01x.1234.5678, 01x 1234 5678, 01x. 1234. 5678
+    /01[0-9][-.\s]*[0-9]{3}[-.\s]*[0-9]{4}/g,        // 01x-123-4567, 01x.123.4567, 01x 123 4567, 01x. 123. 4567
+    // 앞에 문자가 붙은 패턴들 (유연한 매칭)
+    /\b010\.\s{2,}[0-9]{4}\.\s{2,}[0-9]{4}/g,        // M. 010.  1234.  5678 (단어 경계 사용)
+    /\b01[0-9]\.\s{2,}[0-9]{4}\.\s{2,}[0-9]{4}/g,    // M. 011.  1234.  5678 (단어 경계 사용)
+    /\b010\.\s{2,}[0-9]{3}\.\s{2,}[0-9]{4}/g,        // M. 010.  123.  4567 (단어 경계 사용)
+    /\b01[0-9]\.\s{2,}[0-9]{3}\.\s{2,}[0-9]{4}/g,    // M. 011.  123.  4567 (단어 경계 사용)
+    // 일반적인 점과 띄어쓰기 패턴 (앞에 문자가 붙은 경우)
+    /\b010\.\s[0-9]{4}\.\s[0-9]{4}/g,                // M. 010. 1234. 5678
+    /\b010\.\s[0-9]{3}\.\s[0-9]{4}/g,                // M. 010. 123. 4567
+    /\b01[0-9]\.\s[0-9]{4}\.\s[0-9]{4}/g,            // M. 011. 1234. 5678
+    /\b01[0-9]\.\s[0-9]{3}\.\s[0-9]{4}/g             // M. 011. 123. 4567
   ]
   
   let phoneFound = false
@@ -131,16 +154,6 @@ function extractFieldsFromText(text: string): OCRFields {
       phoneFound = true
       console.log('Found mobile phone:', matches[0], '->', fields.phone)
       break
-    }
-  }
-  
-  // 핸드폰을 찾지 못한 경우 일반 전화번호 패턴 시도
-  if (!phoneFound) {
-    const phoneRegex = /(\+82|0)?[0-9]{2,3}[-.\s]?[0-9]{3,4}[-.\s]?[0-9]{4}/g
-    const phoneMatch = text.match(phoneRegex)
-    if (phoneMatch) {
-      fields.phone = normalizePhone(phoneMatch[0])
-      console.log('Found general phone:', phoneMatch[0], '->', fields.phone)
     }
   }
 
@@ -171,39 +184,134 @@ function extractFieldsFromText(text: string): OCRFields {
   )
   const companyRegex = new RegExp(`(${escapedKeywords.join('|')})`, 'i')
 
-  // Name: 개선된 이름 추출 로직
-  if (lines.length) {
-    // 한국어 이름 패턴 (2-4글자)
-    const koreanNameRegex = /^[가-힣]{2,4}$/
+  // Name: 개선된 이름 추출 (더 포괄적으로)
+  
+  // 1단계: 한국어 이름 우선 검색 (더 관대한 조건)
+  for (const line of lines) {
+    // 한국어 이름 패턴 (띄어쓰기 포함)
+    const koreanNamePattern = /^[가-힣]{2,4}$|^[가-힣]\s[가-힣]{1,3}$|^[가-힣]{2}\s[가-힣]{1,2}$|^[가-힣]{3}\s[가-힣]$/
     
-    // 이름 후보들을 수집
-    const nameCandidates: string[] = []
-    
+    if (koreanNamePattern.test(line) && 
+        !line.includes('@') &&
+        !line.match(/^[0-9+\-\s]+$/) && // 숫자만 있는 줄만 제외
+        !companyRegex.test(line) &&
+        !titleRegex.test(line) &&
+        !deptRegex.test(line)) {
+      fields.name = line
+      console.log('Found Korean name:', fields.name)
+      break
+    }
+  }
+  
+  // 2단계: 한국어 이름을 찾지 못한 경우 영어 이름 시도
+  if (!fields.name) {
     for (const line of lines) {
-      // 한국어 이름 패턴이고, 이메일이나 전화번호가 아닌 경우
-      if (koreanNameRegex.test(line) && 
+      // 영어 이름 패턴 (2-3 단어)
+      if (/^[A-Za-z]{2,20}\s+[A-Za-z]{2,20}(\s+[A-Za-z]{2,20})?$/.test(line) &&
           !line.includes('@') &&
-          !line.match(/[0-9+\-\s]/) &&
           !companyRegex.test(line) &&
           !titleRegex.test(line) &&
           !deptRegex.test(line)) {
-        nameCandidates.push(line)
+        fields.name = line
+        console.log('Found English name:', fields.name)
+        break
       }
     }
+  }
     
-    // 이름 후보가 있으면 첫 번째를 선택
-    if (nameCandidates.length > 0) {
-      fields.name = nameCandidates[0]
-      console.log('Found name:', fields.name)
-    } else if (lines.length > 0) {
-      // 이름을 찾지 못한 경우 첫 번째 줄이 회사명이 아닌지 확인
-      const firstLine = lines[0]
-      if (!companyRegex.test(firstLine) && 
-          !firstLine.includes('@') && 
-          !firstLine.match(/^[0-9+\-\s]+$/)) {
-        fields.name = firstLine
-        console.log('Using first line as name:', fields.name)
+  // 3단계: 복합 텍스트에서 이름 추출 시도 (더 관대한 조건)
+  if (!fields.name) {
+    for (const line of lines) {
+      // "김진희 Jinhee Kim" 또는 "권 혁 수" 같은 패턴에서 한국어 이름 추출
+      const koreanInLine = line.match(/[가-힣]{2,4}/g)
+      const koreanWithSpaceInLine = line.match(/[가-힣]\s[가-힣]{1,3}|[가-힣]{2}\s[가-힣]{1,2}|[가-힣]{3}\s[가-힣]/g)
+      
+      // 연속된 한국어 이름 조합
+      if (koreanInLine && koreanInLine.length > 0) {
+        // 더 관대한 필터링 - 기본적인 회사명 키워드만 제외
+        const validNames = koreanInLine.filter(name => 
+          !name.includes('회사') && 
+          !name.includes('기업') &&
+          !name.includes('그룹') &&
+          !name.includes('센터') &&
+          !name.includes('연구') &&
+          !name.includes('본부') &&
+          !name.includes('부서') &&
+          !name.includes('팀') &&
+          !name.includes('사장') &&
+          !name.includes('부장') &&
+          !name.includes('과장') &&
+          !name.includes('대리') &&
+          !name.includes('팀장')
+        )
+        if (validNames.length > 0) {
+          fields.name = validNames[0]
+          console.log('Found name in complex text:', fields.name)
+          break
+        }
       }
+      
+      // 띄어쓰기가 있는 한국어 이름
+      if (koreanWithSpaceInLine && koreanWithSpaceInLine.length > 0) {
+        const validNamesWithSpace = koreanWithSpaceInLine.filter(name => 
+          !name.includes('회사') && 
+          !name.includes('기업') &&
+          !name.includes('그룹') &&
+          !name.includes('센터') &&
+          !name.includes('연구') &&
+          !name.includes('본부') &&
+          !name.includes('부서') &&
+          !name.includes('팀') &&
+          !name.includes('사장') &&
+          !name.includes('부장') &&
+          !name.includes('과장') &&
+          !name.includes('대리') &&
+          !name.includes('팀장')
+        )
+        if (validNamesWithSpace.length > 0) {
+          fields.name = validNamesWithSpace[0]
+          console.log('Found name with space in complex text:', fields.name)
+          break
+        }
+      }
+      
+      // 영어 이름도 시도
+      const englishInLine = line.match(/[A-Za-z]{2,20}\s+[A-Za-z]{2,20}/g)
+      if (englishInLine && englishInLine.length > 0) {
+        const validEnglishNames = englishInLine.filter(name => 
+          !name.includes('Microsoft') && 
+          !name.includes('HelloT') &&
+          !name.includes('Company') &&
+          !name.includes('Corp') &&
+          !name.includes('Inc')
+        )
+        if (validEnglishNames.length > 0) {
+          fields.name = validEnglishNames[0]
+          console.log('Found English name in complex text:', fields.name)
+          break
+        }
+      }
+    }
+  }
+    
+  // 4단계: 여전히 이름을 찾지 못한 경우 첫 번째 줄 시도 (더 엄격한 조건)
+  if (!fields.name && lines.length > 0) {
+    const firstLine = lines[0]
+    if (!companyRegex.test(firstLine) && 
+        !firstLine.includes('@') && 
+        !firstLine.match(/^[0-9+\-\s]+$/) &&
+        !titleRegex.test(firstLine) &&
+        !deptRegex.test(firstLine) &&
+        firstLine.length <= 10 && // 너무 긴 줄은 제외
+        !firstLine.includes('회사') && // 회사 관련 단어 제외
+        !firstLine.includes('기업') &&
+        !firstLine.includes('그룹') &&
+        !firstLine.includes('Corp') &&
+        !firstLine.includes('Inc') &&
+        !firstLine.includes('Ltd') &&
+        !firstLine.includes('Company')) {
+      fields.name = firstLine
+      console.log('Using first line as name:', fields.name)
     }
   }
 
@@ -225,7 +333,7 @@ function extractFieldsFromText(text: string): OCRFields {
     }
   }
 
-  // Company indicators - 개선된 패턴
+  // Company indicators - 점수 기반 시스템
   const companyCandidates: { line: string, score: number }[] = []
   
   for (const line of lines) {
@@ -252,8 +360,10 @@ function extractFieldsFromText(text: string): OCRFields {
   // 점수가 높은 순으로 정렬하여 가장 적합한 회사명 선택
   if (companyCandidates.length > 0) {
     companyCandidates.sort((a, b) => b.score - a.score)
-    fields.company = companyCandidates[0].line
-    console.log('Selected company (highest score):', fields.company, 'Score:', companyCandidates[0].score)
+    const rawCompanyName = companyCandidates[0].line
+    // 기업 형태 키워드 제거하여 순수한 회사명만 추출
+    fields.company = cleanCompanyName(rawCompanyName)
+    console.log('Selected company (highest score):', rawCompanyName, '-> cleaned:', fields.company, 'Score:', companyCandidates[0].score)
   } else {
     // 회사명을 찾지 못한 경우, 더 스마트한 추론
     console.log('No company keywords found, trying smart inference...')
@@ -269,8 +379,8 @@ function extractFieldsFromText(text: string): OCRFields {
     for (const line of lines) {
       for (const company of knownCompanies) {
         if (line.includes(company)) {
-          fields.company = line
-          console.log('Found known company:', fields.company)
+          fields.company = cleanCompanyName(line)
+          console.log('Found known company:', line, '-> cleaned:', fields.company)
           break
         }
       }
@@ -285,8 +395,8 @@ function extractFieldsFromText(text: string): OCRFields {
             !line.match(/^[0-9+\-\s]+$/) &&
             !titleRegex.test(line) &&
             !deptRegex.test(line)) {
-          fields.company = line
-          console.log('Using line as company:', fields.company)
+          fields.company = cleanCompanyName(line)
+          console.log('Using line as company:', line, '-> cleaned:', fields.company)
           break
         }
       }
@@ -294,6 +404,46 @@ function extractFieldsFromText(text: string): OCRFields {
   }
 
   return fields
+}
+
+function cleanCompanyName(companyName: string): string {
+  // 기업 형태 키워드들을 제거하여 순수한 회사명만 추출
+  const companyTypeKeywords = [
+    // 국문 기업 형태
+    '주식회사', '(주)', '㈜', '주)', '주(',
+    '(유)', '유)', '유(', '유한회사', '유한책임회사',
+    '합자회사', '합명회사',
+    // 단체·기관
+    '(사)', '사)', '(재)', '재)', '사단법인', '재단법인',
+    '협동조합', '협회', '조합', '공사', '공단', '센터', '연구소', '연구원',
+    '본부', '재단', '학교', '대학', '병원', '의원', '학회', '학원',
+    // 영문
+    'Co., Ltd.', 'Ltd.', 'Inc.', 'Corp.', 'Corporation', 'LLC', 'LLP',
+    'Foundation', 'Association', 'Institute', 'Society', 'GmbH', 'S.A.', 
+    'Pte. Ltd.', 'Pty Ltd.', 'KK', 'Co Ltd', 'Co.Ltd'
+  ]
+  
+  let cleanedName = companyName.trim()
+  
+  // 키워드들을 제거 (앞뒤로 공백이 있는 경우도 처리)
+  for (const keyword of companyTypeKeywords) {
+    // 앞뒤 공백과 함께 제거
+    const regex = new RegExp(`\\s*${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*`, 'gi')
+    cleanedName = cleanedName.replace(regex, ' ').trim()
+    
+    // 맨 앞이나 맨 뒤에 있는 경우도 제거
+    if (cleanedName.startsWith(keyword)) {
+      cleanedName = cleanedName.substring(keyword.length).trim()
+    }
+    if (cleanedName.endsWith(keyword)) {
+      cleanedName = cleanedName.substring(0, cleanedName.length - keyword.length).trim()
+    }
+  }
+  
+  // 연속된 공백을 하나로 정리
+  cleanedName = cleanedName.replace(/\s+/g, ' ').trim()
+  
+  return cleanedName || companyName // 빈 문자열이면 원본 반환
 }
 
 function normalizePhone(phone: string): string {
@@ -314,47 +464,21 @@ function normalizePhone(phone: string): string {
 
   console.log('After +82 conversion:', cleaned)
 
-  // 핸드폰 번호 우선 처리 (010으로 시작)
-  if (cleaned.startsWith('010')) {
+  // 핸드폰 번호만 처리 (01x로 시작)
+  if (cleaned.startsWith('01')) {
     if (cleaned.length === 11) {
-      // 010-1234-5678
+      // 010-1234-5678, 011-1234-5678, 016-1234-5678, 017-1234-5678, 018-1234-5678, 019-1234-5678
       const result = `${cleaned.slice(0, 3)}-${cleaned.slice(3, 7)}-${cleaned.slice(7)}`
-      console.log('Mobile phone result:', result)
+      console.log('Mobile phone result (11 digits):', result)
       return result
     } else if (cleaned.length === 10) {
-      // 010-123-4567 (일부 번호)
+      // 010-123-4567, 011-123-4567, 016-123-4567, 017-123-4567, 018-123-4567, 019-123-4567
       const result = `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6)}`
       console.log('Mobile phone result (10 digits):', result)
       return result
     }
   }
 
-  // 일반 전화번호 처리
-  // 02-1234-5678 (10자리 서울)
-  if (cleaned.length === 10 && cleaned.startsWith('02')) {
-    return `${cleaned.slice(0, 2)}-${cleaned.slice(2, 6)}-${cleaned.slice(6)}`
-  }
-
-  // 기타 지역번호 (10자리)
-  if (cleaned.length === 10) {
-    return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6)}`
-  }
-
-  // 9자리 (02 지역번호)
-  if (cleaned.length === 9 && cleaned.startsWith('02')) {
-    return `${cleaned.slice(0, 2)}-${cleaned.slice(2, 5)}-${cleaned.slice(5)}`
-  }
-
-  // 8자리 (02 지역번호, 일부 번호)
-  if (cleaned.length === 8 && cleaned.startsWith('02')) {
-    return `${cleaned.slice(0, 2)}-${cleaned.slice(2, 5)}-${cleaned.slice(5)}`
-  }
-
-  // 11자리 일반 전화번호 (지역번호 3자리)
-  if (cleaned.length === 11 && !cleaned.startsWith('010')) {
-    return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 7)}-${cleaned.slice(7)}`
-  }
-
-  console.log('Returning original phone:', phone)
-  return phone
+  console.log('Mobile phone not found, returning original:', cleaned)
+  return cleaned
 }
