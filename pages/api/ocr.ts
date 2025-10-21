@@ -147,7 +147,29 @@ function extractFieldsFromText(text: string): OCRFields {
   // 정규식 패턴들을 먼저 정의
   const titleRegex = /(대표|사장|부사장|전무|상무|이사|부장|차장|과장|대리|주임|팀장|실장|원장|교수|CEO|CTO|CFO|COO)/i
   const deptRegex = /(부|팀|실|센터|연구소|사업부|영업부|마케팅|개발|기획|인사|총무|재무|회계|본부|Department|Dept)/i
-  const companyRegex = /(주식회사|\(주\)|\(사\)|회사|Corp|Inc|Ltd|Co\.|㈜|Group|그룹|기업|기술|솔루션|시스템|컨설팅|아이티|IT|소프트웨어|하드웨어)/i
+  // 회사명 관련 키워드들 (OCR 인식 오류 고려)
+  const companyKeywords = [
+    // 국문 기업 형태 (다양한 OCR 인식 패턴 포함)
+    "㈜", "(주)", "주)", "주(", "주식회사",
+    "(유)", "유)", "유(", "유한회사", "유한책임회사",
+    "합자회사", "합명회사",
+    // 단체·기관
+    "(사)", "사)", "(재)", "재)", "사단법인", "재단법인",
+    "협동조합", "협회", "조합", "공사", "공단", "센터", "연구소", "연구원",
+    "본부", "재단", "학교", "대학", "병원", "의원", "학회", "학원",
+    // 영문
+    "Co., Ltd.", "Ltd.", "Inc.", "Corp.", "Corporation", "LLC", "LLP",
+    "Foundation", "Association", "Institute", "Society", "GmbH", "S.A.", "Pte. Ltd.", "Pty Ltd.",
+    "KK", "Co Ltd", "Co.Ltd",
+    // OCR 인식 오류로 인한 변형들
+    "주", "사", "재", "회사", "기업", "그룹", "Group", "Company", "Corp", "Inc", "Ltd"
+  ]
+  
+  // 회사명 정규식 패턴 생성 (특수문자 이스케이프)
+  const escapedKeywords = companyKeywords.map(keyword => 
+    keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  )
+  const companyRegex = new RegExp(`(${escapedKeywords.join('|')})`, 'i')
 
   // Name: 개선된 이름 추출 로직
   if (lines.length) {
@@ -204,29 +226,69 @@ function extractFieldsFromText(text: string): OCRFields {
   }
 
   // Company indicators - 개선된 패턴
-  const companyCandidates: string[] = []
+  const companyCandidates: { line: string, score: number }[] = []
   
   for (const line of lines) {
     if (companyRegex.test(line)) {
-      companyCandidates.push(line)
+      // 회사명 키워드 개수로 점수 계산
+      let score = 0
+      for (const keyword of companyKeywords) {
+        if (line.includes(keyword)) {
+          // 더 명확한 키워드에 높은 점수 부여
+          if (['주식회사', '유한회사', 'Corporation', 'Inc.', 'Ltd.'].includes(keyword)) {
+            score += 3
+          } else if (['(주)', '㈜', 'Corp.', 'LLC', '사단법인', '재단법인'].includes(keyword)) {
+            score += 2
+          } else {
+            score += 1
+          }
+        }
+      }
+      companyCandidates.push({ line, score })
+      console.log('Company candidate:', line, 'Score:', score)
     }
   }
   
-  // 회사명 후보가 있으면 첫 번째를 선택
+  // 점수가 높은 순으로 정렬하여 가장 적합한 회사명 선택
   if (companyCandidates.length > 0) {
-    fields.company = companyCandidates[0]
-    console.log('Found company:', fields.company)
+    companyCandidates.sort((a, b) => b.score - a.score)
+    fields.company = companyCandidates[0].line
+    console.log('Selected company (highest score):', fields.company, 'Score:', companyCandidates[0].score)
   } else {
-    // 회사명을 찾지 못한 경우, 이름이 아닌 첫 번째 줄을 회사명으로 사용
+    // 회사명을 찾지 못한 경우, 더 스마트한 추론
+    console.log('No company keywords found, trying smart inference...')
+    
+    // 알려진 대기업명이나 브랜드명 찾기
+    const knownCompanies = [
+      '삼성', 'Samsung', 'LG', '현대', 'Hyundai', '기아', 'Kia', 'SK', '롯데', 'Lotte',
+      'CJ', 'GS', '한화', 'Hanwha', '두산', 'Doosan', '포스코', 'POSCO', 'KT', 'SKT',
+      '네이버', 'Naver', '카카오', 'Kakao', '쿠팡', 'Coupang', '배달의민족', 'Baemin',
+      '토스', 'Toss', 'Microsoft', 'Apple', 'Google', 'Amazon', 'Facebook', 'Twitter'
+    ]
+    
     for (const line of lines) {
-      if (line !== fields.name && 
-          !line.includes('@') && 
-          !line.match(/^[0-9+\-\s]+$/) &&
-          !titleRegex.test(line) &&
-          !deptRegex.test(line)) {
-        fields.company = line
-        console.log('Using line as company:', fields.company)
-        break
+      for (const company of knownCompanies) {
+        if (line.includes(company)) {
+          fields.company = line
+          console.log('Found known company:', fields.company)
+          break
+        }
+      }
+      if (fields.company) break
+    }
+    
+    // 여전히 찾지 못한 경우 이름이 아닌 첫 번째 줄을 회사명으로 사용
+    if (!fields.company) {
+      for (const line of lines) {
+        if (line !== fields.name && 
+            !line.includes('@') && 
+            !line.match(/^[0-9+\-\s]+$/) &&
+            !titleRegex.test(line) &&
+            !deptRegex.test(line)) {
+          fields.company = line
+          console.log('Using line as company:', fields.company)
+          break
+        }
       }
     }
   }
